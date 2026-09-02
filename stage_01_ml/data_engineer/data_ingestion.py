@@ -11,9 +11,9 @@ def generate_synthetic_data(raw_dir: str):
     np.random.seed(42)
     
     zones = ["Zone_A", "Zone_B", "Zone_C", "Zone_D"]
-    # Generate 14 days of hourly data to ensure we can calculate 72-hour rolling windows
-    num_hours = 14 * 24 
-    start_date = pd.Timestamp("2026-08-01 00:00:00")
+    # Generate 52 days of hourly data (52 * 24 * 4 = 4992 rows)
+    num_hours = 52 * 24 
+    start_date = pd.Timestamp("2026-06-01 00:00:00")
     
     # 1. River & Rainfall Gauges
     river_rainfall_records = []
@@ -60,12 +60,23 @@ def generate_synthetic_data(raw_dir: str):
             else:
                 current_river_val = round(current_river, 2)
                 
-            river_rainfall_records.append({
-                "zone_id": zone,
+            # Create messy zone string
+            messy_zone = zone
+            if np.random.rand() < 0.1:
+                messy_zone = zone.lower()
+            elif np.random.rand() < 0.1:
+                messy_zone = zone.upper()
+                
+            record_1 = {
+                "zone_id": messy_zone,
                 "timestamp": dt.isoformat(),
                 "river_level": current_river_val,
                 "rainfall": r_val
-            })
+            }
+            river_rainfall_records.append(record_1)
+            # Inject duplicate
+            if np.random.rand() < 0.03:
+                river_rainfall_records.append(record_1)
             
             # Emergency calls (correlated with bad conditions)
             base_calls = np.random.poisson(lam=2)
@@ -80,11 +91,14 @@ def generate_synthetic_data(raw_dir: str):
             else:
                 final_calls = int(base_calls)
                 
-            emergency_calls_records.append({
-                "zone": zone.upper(), # Intentionally different case for cleaning step
+            record_2 = {
+                "zone": messy_zone.swapcase(), # Intentionally different case for cleaning step
                 "time_stamp": dt.strftime("%Y/%m/%d %H:%M:%S"), # Intentionally different format
                 "emergency_call_volume": final_calls
-            })
+            }
+            emergency_calls_records.append(record_2)
+            if np.random.rand() < 0.03:
+                emergency_calls_records.append(record_2)
             
             # Infrastructure closures
             prob_closure = 1 / (1 + np.exp(-(current_river - 4.0) * 2.0))
@@ -97,12 +111,15 @@ def generate_synthetic_data(raw_dir: str):
             if np.random.rand() < 0.05:
                 bridge_closures = np.nan
                 
-            infrastructure_records.append({
-                "zone_id": zone,
+            record_3 = {
+                "zone_id": messy_zone,
                 "timestamp": dt.isoformat(),
                 "road_closures": road_closures,
                 "bridge_closures": bridge_closures
-            })
+            }
+            infrastructure_records.append(record_3)
+            if np.random.rand() < 0.03:
+                infrastructure_records.append(record_3)
             
     # Save 1, 3, 4
     pd.DataFrame(river_rainfall_records).to_csv(os.path.join(raw_dir, "river_rainfall_data.csv"), index=False)

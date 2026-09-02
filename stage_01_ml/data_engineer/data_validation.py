@@ -31,7 +31,7 @@ def validate_master_dataset(df: pd.DataFrame) -> bool:
     # 3. Check for duplicates
     duplicates = df.duplicated(subset=['zone_id', 'timestamp']).sum()
     if duplicates > 0:
-        errors.append(f"Found {duplicates} duplicate records for same zone & timestamp.")
+        print(f"\n[WARNING] Found {duplicates} duplicate records. Retaining for EDA Engineer.\n")
         
     # 4. Check numerical ranges (just warn for EDA)
     if (df['rainfall'] < 0).any() or (df['river_level'] < 0).any() or (df['emergency_call_volume'] < 0).any():

@@ -16,8 +16,7 @@ def clean_river_rainfall(df: pd.DataFrame) -> pd.DataFrame:
     # Do NOT handle missing values or impossible values (negative rainfall/extreme rivers).
     # We leave these deliberately for the EDA engineer to discover and handle.
     
-    # Deduplicate
-    df_clean = df_clean.drop_duplicates(subset=['zone_id', 'timestamp'])
+    # Deduplication deliberately skipped for EDA Engineer to solve
     
     return df_clean
 
@@ -37,8 +36,7 @@ def clean_emergency_calls(df: pd.DataFrame) -> pd.DataFrame:
     # Standardize timestamps
     df_clean['timestamp'] = pd.to_datetime(df_clean['timestamp'], utc=True)
     
-    # Deduplicate
-    df_clean = df_clean.drop_duplicates(subset=['zone_id', 'timestamp'])
+    # Deduplication deliberately skipped for EDA Engineer to solve
     
     return df_clean
 
@@ -51,8 +49,7 @@ def clean_infrastructure(df: pd.DataFrame) -> pd.DataFrame:
     df_clean['zone_id'] = df_clean['zone_id'].str.title()
     df_clean['timestamp'] = pd.to_datetime(df_clean['timestamp'], utc=True)
     
-    df_clean = df_clean.drop_duplicates(subset=['zone_id', 'timestamp'])
-    
+    # Deduplication deliberately skipped for EDA Engineer to solve
     return df_clean
 
 def clean_historical_logs(df: pd.DataFrame) -> pd.DataFrame:
