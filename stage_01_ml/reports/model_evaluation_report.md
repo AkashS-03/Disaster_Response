@@ -4,19 +4,19 @@
 The machine learning model (RandomForestClassifier) was evaluated on a 20% holdout test set to ensure its capability to classify disaster risk accurately.
 
 ## Global Metrics
-- **Accuracy**: 0.9970
+- **Accuracy**: 1.0000
 
 ## Classification Report
 ```text
               precision    recall  f1-score   support
 
-         LOW       1.00      1.00      1.00       560
-    MODERATE       0.98      1.00      0.99       106
-      SEVERE       1.00      0.67      0.80         6
+         LOW       1.00      1.00      1.00      3082
+    MODERATE       1.00      1.00      1.00         7
+      SEVERE       1.00      1.00      1.00      3939
 
-    accuracy                           1.00       672
-   macro avg       0.99      0.89      0.93       672
-weighted avg       1.00      1.00      1.00       672
+    accuracy                           1.00      7028
+   macro avg       1.00      1.00      1.00      7028
+weighted avg       1.00      1.00      1.00      7028
 
 ```
 

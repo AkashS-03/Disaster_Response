@@ -7,14 +7,14 @@
 - Imputed missing values (forward fill for river levels, 0 for rainfall and counts).
 
 ## Final Dataset Shape
-- **Rows**: 3359
+- **Rows**: 35136
 - **Columns**: 14
 
 ## Target Variable Distribution
 risk_label
-LOW         2799
-MODERATE     528
-SEVERE        32
+SEVERE      19695
+LOW         15406
+MODERATE       35
 
 ## Key Findings
 - The correlation heatmap (`reports/figures/correlation_heatmap.png`) shows strong relationships between `river_level_rolling_72h_avg` and infrastructure closures.
