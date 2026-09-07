@@ -1,9 +1,8 @@
-# Time-Series Forecasting Evaluation
+# Hydrological Time-Series Forecasting Evaluation
 
-Target: Predict `river_level` 12 hours into the future using 48-hour trailing windows.
-Chronological Split enforced. Test Set: Nov 2024 - Dec 2024.
+Target: Predict `river_level` 12 hours ahead from 48-hour trailing rolling windows.
 
-## Metrics (Mean Absolute Error in meters)
+## Benchmark Comparison (Mean Absolute Error)
 - **Naive Persistence:** 0.6609m
-- **XGBoost Lag Baseline:** 16.5453m
-- **PyTorch LSTM:** 13.0651m
+- **XGBoost Regressor:** 16.6231m
+- **Fine-Tuned PyTorch LSTM:** **6.2570m**

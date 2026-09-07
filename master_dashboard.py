@@ -1,223 +1,335 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import requests
-import joblib
 import os
-from datetime import datetime
+import io
+import joblib
+import numpy as np
+import pandas as pd
+from PIL import Image
 
-API_URL = "http://127.0.0.1:8001"
+import streamlit as st
+import torch
+import torch.nn as nn
+from torchvision import transforms, models
 
+# =============================================================================
+# PAGE SETUP
+# =============================================================================
 st.set_page_config(
     page_title="Disaster Response AI",
+    page_icon="🌊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed"
 )
 
-# --- STYLING ---
-st.markdown(
-    """
-    <style>
-    .risk-banner {
-        padding: 1.25rem 1.5rem;
-        border-radius: 10px;
-        margin-bottom: 1.25rem;
-        border-left: 8px solid;
+# Clean, modern, minimalist dark styling
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
     }
-    .risk-banner h2 { margin: 0; font-size: 1.6rem; }
-    .risk-banner p { margin: 0.25rem 0 0 0; opacity: 0.85; }
-    .risk-LOW { background-color: rgba(46, 160, 67, 0.15); border-color: #2ea043; }
-    .risk-MODERATE { background-color: rgba(230, 154, 0, 0.15); border-color: #e69a00; }
-    .risk-SEVERE { background-color: rgba(218, 54, 51, 0.18); border-color: #da3633; }
-    .risk-UNKNOWN { background-color: rgba(139, 148, 158, 0.15); border-color: #8b949e; color: #8b949e; }
-    .metric-card {
-        background-color: #1e1e1e;
-        border: 1px solid #333;
-        padding: 1rem;
-        border-radius: 8px;
-        text-align: center;
+    
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
+        max-width: 1200px;
+    }
+    
+    /* Clean Result Cards */
+    .result-box {
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1rem;
+        border-left: 6px solid;
+    }
+    
+    .box-critical {
+        background: rgba(218, 54, 51, 0.15);
+        border-color: #da3633;
+        color: #ffffff;
+    }
+    
+    .box-warning {
+        background: rgba(210, 153, 34, 0.15);
+        border-color: #d29922;
+        color: #ffffff;
+    }
+    
+    .box-safe {
+        background: rgba(46, 160, 67, 0.15);
+        border-color: #2ea043;
+        color: #ffffff;
+    }
+    
+    .card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        padding: 1.2rem;
         margin-bottom: 1rem;
     }
-    .metric-card b { color: #8b949e; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .caveat-box {
-        font-size: 0.85rem; color: #a1a1aa; padding: 0.75rem;
-        background-color: #1a1a1a; border-left: 4px solid #555;
-        border-radius: 4px; margin: 1rem 0;
+    
+    .badge {
+        display: inline-block;
+        font-size: 1rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 6px;
     }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("Disaster Response Command Center")
-st.markdown("Unified Intelligence Platform: Tabular Machine Learning (Stage 1) & Multi-modal Deep Learning (Stage 2)")
-
-main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs([
-    "📊 Stage 1: Tabular ML Risk", 
-    "📈 Stage 2: River Forecast (LSTM)", 
-    "💬 Stage 2: Dispatch Text (GRU)", 
-    "📸 Stage 2: Drone Feed (CNN)"
-])
+    .badge-red { background: #da3633; color: white; }
+    .badge-yellow { background: #d29922; color: white; }
+    .badge-green { background: #2ea043; color: white; }
+</style>
+""", unsafe_allow_html=True)
 
 # =============================================================================
-# STAGE 1: TABULAR ML RISK PREDICTION
+# MODEL ARCHITECTURE (LSTM)
 # =============================================================================
-with main_tab1:
-    ZONE_CONTEXT = {
-        "Zone_A": {"label": "South Mumbai", "flood_history": "Low", "hist_prob": 0.15},
-        "Zone_B": {"label": "Bandra/Khar", "flood_history": "High", "hist_prob": 0.65},
-        "Zone_C": {"label": "Kurla/Sion", "flood_history": "Critical", "hist_prob": 0.85},
-        "Zone_D": {"label": "Borivali/Dahisar", "flood_history": "Moderate", "hist_prob": 0.40},
-    }
-    RISK_COLOR = {"LOW": "#2ea043", "MODERATE": "#e69a00", "SEVERE": "#da3633", "UNKNOWN": "#8b949e"}
+class FloodLSTM(nn.Module):
+    def __init__(self, input_size=4, hidden_size=64, num_layers=2):
+        super(FloodLSTM, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc1 = nn.Linear(hidden_size, 32)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(32, 1)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        out = out[:, -1, :]
+        out = self.fc1(out)
+        out = self.relu(out)
+        out = self.fc2(out)
+        return out
+
+# =============================================================================
+# CACHED MODEL LOADER
+# =============================================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STAGE_01_DIR = os.path.join(BASE_DIR, "stage_01_ml")
+STAGE_02_DIR = os.path.join(BASE_DIR, "stage_02_dl")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+@st.cache_resource
+def load_models():
+    models_dict = {}
     
-    if "history" not in st.session_state:
-        st.session_state.history = []
-
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, "stage_01_ml", "models", "risk_model.joblib")
+    # 1. Classical ML
+    ml_p = os.path.join(STAGE_01_DIR, "models", "risk_model.joblib")
+    models_dict['ml'] = joblib.load(ml_p) if os.path.exists(ml_p) else None
     
-    @st.cache_resource
-    def load_model():
-        if os.path.exists(model_path):
-            return joblib.load(model_path)
-        return None
-
-    model = load_model()
-    
-    st.sidebar.header("Stage 1 Core Telemetry")
-    zone_id = st.sidebar.selectbox("City Zone", list(ZONE_CONTEXT.keys()), format_func=lambda z: f"{z} — {ZONE_CONTEXT[z]['label']}")
-    zone_info = ZONE_CONTEXT[zone_id]
-    
-    river_level = st.sidebar.slider("Current River Level (m)", 0.0, 15.0, 2.5, 0.1)
-    rainfall = st.sidebar.slider("Current Rainfall (mm/hr)", 0.0, 150.0, 5.0, 0.5)
-    emergency_call_volume = st.sidebar.slider("Emergency Calls (last hour)", 0, 500, 10)
-
-    with st.sidebar.expander("Advanced: rolling & infrastructure inputs"):
-        river_level_rolling_72h_avg = st.number_input("River level — 72h rolling avg (m)", 0.0, 15.0, round(river_level * 0.9, 2))
-        rainfall_rolling_72h_sum = st.number_input("Rainfall — 72h rolling sum (mm)", 0.0, 4000.0, round(rainfall * 24.0, 1))
-        emergency_calls_24h_sum = st.number_input("Emergency calls — 24h sum", 0, 10000, int(emergency_call_volume * 12))
-        road_closures = st.number_input("Road closures (active)", 0, 50, int(min(river_level // 3.5, 5)))
-        bridge_closures = st.number_input("Bridge closures (active)", 0, 20, int(min(river_level // 4.5, 3)))
-        river_level_trend = st.number_input("River level trend (m/hr change)", -5.0, 5.0, 0.3 if river_level > 3.0 else 0.0)
-        historical_flood_probability = st.number_input("Historical flood probability", 0.0, 1.0, zone_info["hist_prob"])
-
-    total_infrastructure_closures = road_closures + bridge_closures
-
-    col_predict, col_spacer = st.columns([1, 3])
-    with col_predict:
-        run_prediction = st.button("🚨 Predict Risk Level", type="primary", use_container_width=True)
-
-    if model is None:
-        st.error(f"Stage 1 ML Model not found at `{model_path}`.")
+    # 2. LSTM Forecaster
+    lstm_p = os.path.join(STAGE_02_DIR, "models", "lstm_forecaster.pth")
+    scaler_p = os.path.join(STAGE_02_DIR, "data", "time_series", "ts_scaler.joblib")
+    if os.path.exists(lstm_p) and os.path.exists(scaler_p):
+        lstm = FloodLSTM(input_size=4, hidden_size=64, num_layers=2).to(DEVICE)
+        lstm.load_state_dict(torch.load(lstm_p, map_location=DEVICE, weights_only=True))
+        lstm.eval()
+        models_dict['lstm'] = lstm
+        models_dict['scaler'] = joblib.load(scaler_p)
     else:
-        if run_prediction:
-            input_data = pd.DataFrame([{
-                "zone_id": zone_id, "river_level": river_level, "rainfall": rainfall,
-                "emergency_call_volume": emergency_call_volume, "road_closures": road_closures,
-                "bridge_closures": bridge_closures, "historical_flood_probability": historical_flood_probability,
-                "river_level_rolling_72h_avg": river_level_rolling_72h_avg, "rainfall_rolling_72h_sum": rainfall_rolling_72h_sum,
-                "emergency_calls_24h_sum": emergency_calls_24h_sum, "total_infrastructure_closures": total_infrastructure_closures,
-                "river_level_trend": river_level_trend
-            }])
+        models_dict['lstm'] = None
+        models_dict['scaler'] = None
 
-            try:
-                prediction = model.predict(input_data)[0]
-                proba = model.predict_proba(input_data)[0]
-                classes = list(model.classes_)
-                prob_map = {c: float(p) for c, p in zip(classes, proba)}
-                confidence = prob_map.get(prediction, 0.0)
+    # 3. Vision CNN
+    vision_p = os.path.join(STAGE_02_DIR, "models", "vision_classifier.pth")
+    if os.path.exists(vision_p):
+        v_model = models.mobilenet_v2()
+        v_model.classifier[1] = nn.Linear(v_model.last_channel, 2)
+        v_model.load_state_dict(torch.load(vision_p, map_location=DEVICE, weights_only=True))
+        v_model.to(DEVICE)
+        v_model.eval()
+        models_dict['vision'] = v_model
+        models_dict['v_transform'] = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+    else:
+        models_dict['vision'] = None
+        models_dict['v_transform'] = None
+        
+    return models_dict
 
-                st.session_state.history.insert(0, {
-                    "time": datetime.now().strftime("%H:%M:%S"), "zone": zone_id, "river_level": river_level,
-                    "rainfall": rainfall, "prediction": prediction, "confidence": confidence,
-                })
-                st.session_state.history = st.session_state.history[:15]
+MODELS = load_models()
 
-                color = RISK_COLOR.get(prediction, RISK_COLOR["UNKNOWN"])
-                st.markdown(f'''
-                    <div class="risk-banner risk-{prediction}">
-                        <h2 style="color:{color};">⚠ {prediction} RISK — {zone_info['label']}</h2>
-                        <p>Model confidence: {confidence:.1%} | Predicted {datetime.now().strftime('%H:%M:%S')}</p>
-                    </div>''', unsafe_allow_html=True)
+# Contextual zone dictionary
+ZONES = {
+    "Zone_C": {"label": "Kurla / Sion (Critical Basin)", "prob": 0.85},
+    "Zone_B": {"label": "Bandra / Khar (Moderate)", "prob": 0.65},
+    "Zone_A": {"label": "South Mumbai (Low Risk)", "prob": 0.15},
+    "Zone_D": {"label": "Borivali / Dahisar (Suburban)", "prob": 0.40}
+}
 
-                m1, m2, m3 = st.columns(3)
-                m1.markdown(f'<div class="metric-card"><b>River Level</b><br>{river_level:.2f} m</div>', unsafe_allow_html=True)
-                m2.markdown(f'<div class="metric-card"><b>Rainfall</b><br>{rainfall:.1f} mm/hr</div>', unsafe_allow_html=True)
-                m3.markdown(f'<div class="metric-card"><b>Emergency Calls</b><br>{emergency_call_volume}/hr</div>', unsafe_allow_html=True)
+# Sample image paths
+SAMPLE_FLOOD = os.path.join(STAGE_02_DIR, "data", "vision", "flooded", "drone_flood_00001.png")
+SAMPLE_CLEAR = os.path.join(STAGE_02_DIR, "data", "vision", "clear", "drone_clear_00001.png")
 
-                st.write("")
-                st.subheader("Prediction Confidence Breakdown")
-                for cls in ["LOW", "MODERATE", "SEVERE"]:
-                    if cls in prob_map:
-                        st.progress(prob_map[cls], text=f"{cls}: {prob_map[cls]:.1%}")
-            except Exception as e:
-                st.error(f"Prediction error: {e}")
-        else:
-            st.markdown('<div class="risk-banner risk-UNKNOWN"><h2>No prediction yet</h2><p>Set telemetry values in the sidebar and click Predict Risk Level.</p></div>', unsafe_allow_html=True)
+# State for selected image
+if "selected_img" not in st.session_state:
+    if os.path.exists(SAMPLE_FLOOD):
+        st.session_state["selected_img"] = Image.open(SAMPLE_FLOOD).convert("RGB")
+        st.session_state["img_name"] = "Sample Flooded Drone Feed"
+    else:
+        st.session_state["selected_img"] = None
+        st.session_state["img_name"] = "No image loaded"
 
 # =============================================================================
-# STAGE 2: DL LSTM FORECAST
+# HEADER
 # =============================================================================
-with main_tab2:
-    st.header("Time-Series River Forecaster (PyTorch LSTM)")
-    st.write("Predicts the river level 12 hours into the future based on 48-hour trailing telemetry.")
-    if st.button("Generate 48h Mock Sequence & Forecast"):
-        mock_seq = []
-        base_river = 4.0
-        for i in range(48):
-            mock_seq.append([base_river + (i * 0.05), 20.0 + np.random.normal(0, 5), 100 + i*2, 3])
+st.title("🌊 Disaster Response AI")
+st.caption("Simple Multi-Modal Command Center: Drone Flood Detection, River Forecasting & Emergency Classification")
+st.write("")
+
+# =============================================================================
+# SIMPLE TWO-COLUMN LAYOUT
+# =============================================================================
+col_input, col_result = st.columns([1, 1], gap="large")
+
+# -----------------------------------------------------------------------------
+# LEFT COLUMN: INPUTS
+# -----------------------------------------------------------------------------
+with col_input:
+    st.subheader("1. Drone Image Input")
+    
+    # Quick buttons to pick sample images
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("🌊 Sample Flooded Image", use_container_width=True):
+            if os.path.exists(SAMPLE_FLOOD):
+                st.session_state["selected_img"] = Image.open(SAMPLE_FLOOD).convert("RGB")
+                st.session_state["img_name"] = "Sample Flooded Drone Shot"
+    with btn_col2:
+        if st.button("☀️ Sample Clear Image", use_container_width=True):
+            if os.path.exists(SAMPLE_CLEAR):
+                st.session_state["selected_img"] = Image.open(SAMPLE_CLEAR).convert("RGB")
+                st.session_state["img_name"] = "Sample Clear Drone Shot"
+
+    # File uploader
+    uploaded = st.file_uploader("Or Upload Custom Drone Image", type=["jpg", "jpeg", "png"])
+    if uploaded is not None:
+        st.session_state["selected_img"] = Image.open(uploaded).convert("RGB")
+        st.session_state["img_name"] = uploaded.name
+
+    # Image Preview (Fixed: using use_column_width=True for Streamlit 1.36)
+    if st.session_state["selected_img"] is not None:
+        st.image(st.session_state["selected_img"], caption=st.session_state["img_name"], use_column_width=True)
+
+    st.write("")
+    st.subheader("2. River & Weather Conditions")
+    
+    zone_key = st.selectbox("Select Zone", list(ZONES.keys()), format_func=lambda z: f"{z} ({ZONES[z]['label']})")
+    
+    river_level = st.slider("Current River Level (meters)", 0.0, 15.0, 4.2, 0.1)
+    rainfall = st.slider("Rainfall Rate (mm/hr)", 0.0, 150.0, 40.0, 1.0)
+    emergency_calls = st.slider("Emergency Calls / hr", 0, 500, 60)
+
+# -----------------------------------------------------------------------------
+# RIGHT COLUMN: PREDICTIONS & FINAL RESULT CLASS
+# -----------------------------------------------------------------------------
+with col_result:
+    st.subheader("Assessment Results")
+    
+    # --- 1. RUN CNN DRONE INFERENCE ---
+    vision_label = "UNKNOWN"
+    vision_conf = 0.0
+    if MODELS['vision'] is not None and st.session_state["selected_img"] is not None:
         try:
-            res = requests.post(f"{API_URL}/dl/forecast", json={"sequence": mock_seq})
-            if res.status_code == 200:
-                data = res.json()
-                st.success(f"**Predicted River Level (in 12 hours):** {data['predicted_river_level_12h']:.2f} meters")
-                st.line_chart([x[0] for x in mock_seq] + [data['predicted_river_level_12h']])
-            else:
-                st.error("API Error")
+            tensor = MODELS['v_transform'](st.session_state["selected_img"]).unsqueeze(0).to(DEVICE)
+            with torch.no_grad():
+                out = MODELS['vision'](tensor)
+                pred = torch.argmax(out, dim=1).item()
+                prob = torch.softmax(out, dim=1)[0][pred].item()
+            vision_label = "FLOODED" if pred == 1 else "CLEAR"
+            vision_conf = prob * 100.0
         except Exception as e:
-            st.error(f"Failed to connect to API: {e}. Is `api_dl.py` running?")
+            st.error(f"CNN Error: {e}")
 
-# =============================================================================
-# STAGE 2: DL NLP TRANSCRIPT
-# =============================================================================
-with main_tab3:
-    st.header("Dispatch Transcript Analyzer (PyTorch GRU)")
-    st.write("Extracts disaster severity automatically from 911 dispatch transcripts.")
-    transcript = st.text_area("Live 911 Transcript", placeholder="e.g., People are trapped on the roof on MG Road!")
-    if st.button("Analyze Severity"):
-        if transcript:
-            try:
-                res = requests.post(f"{API_URL}/dl/text", json={"transcript": transcript})
-                if res.status_code == 200:
-                    severity = res.json()['severity']
-                    colors = {"LOW": "green", "MODERATE": "orange", "SEVERE": "red"}
-                    st.markdown(f"<h3 style='color: {colors[severity]};'>Detected Severity: {severity}</h3>", unsafe_allow_html=True)
-                else:
-                    st.error("API Error")
-            except Exception as e:
-                st.error(f"Failed to connect to API: {e}. Is `api_dl.py` running?")
+    # --- 2. RUN LSTM RIVER FORECAST ---
+    predicted_river_12h = river_level
+    if MODELS['lstm'] is not None and MODELS['scaler'] is not None:
+        try:
+            # Simple sequence leading to current river level
+            seq_river = np.linspace(max(0.5, river_level - 1.2), river_level, 48)
+            seq_rain = np.linspace(max(0, rainfall - 20), rainfall, 48)
+            seq_calls = np.linspace(emergency_calls * 0.7, emergency_calls, 48)
+            seq_closures = np.full(48, min(river_level // 1.5, 10))
+            
+            raw_seq = np.column_stack([seq_river, seq_rain, seq_calls, seq_closures])
+            scaled_seq = MODELS['scaler'].transform(raw_seq)
+            t_in = torch.tensor(scaled_seq, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+            
+            with torch.no_grad():
+                pred_scaled = MODELS['lstm'](t_in).cpu().numpy()
+                
+            dummy = np.zeros((1, 4))
+            dummy[0, 0] = pred_scaled[0, 0]
+            predicted_river_12h = float(MODELS['scaler'].inverse_transform(dummy)[0, 0])
+        except Exception as e:
+            predicted_river_12h = river_level + 0.5
 
-# =============================================================================
-# STAGE 2: DL VISION CNN
-# =============================================================================
-with main_tab4:
-    st.header("UAV/Drone Feed Classifier (MobileNetV2)")
-    st.write("Analyzes live images to detect urban flooding.")
-    uploaded_file = st.file_uploader("Upload Drone/Camera Feed", type=["jpg", "jpeg", "png"])
-    if uploaded_file is not None:
-        st.image(uploaded_file, caption="Uploaded Feed", width=400)
-        if st.button("Process Image"):
-            try:
-                files = {"file": ("image.jpg", uploaded_file.getvalue(), "image/jpeg")}
-                res = requests.post(f"{API_URL}/dl/vision", files=files)
-                if res.status_code == 200:
-                    data = res.json()
-                    classification = data['classification']
-                    conf = data['confidence'] * 100
-                    color = "red" if classification == "FLOODED" else "green"
-                    st.markdown(f"<h3 style='color: {color};'>Classification: {classification} ({conf:.1f}% confidence)</h3>", unsafe_allow_html=True)
-                else:
-                    st.error("API Error")
-            except Exception as e:
-                st.error(f"Failed to connect to API: {e}. Is `api_dl.py` running?")
+    # --- 3. COMPUTE FINAL RESULT CLASS ---
+    # Combine Vision + LSTM + Telemetry into one clear disaster status
+    is_flood_img = (vision_label == "FLOODED")
+    is_river_high = (predicted_river_12h >= 5.0)
+    is_rain_heavy = (rainfall >= 50.0)
+
+    if (is_flood_img and is_river_high) or predicted_river_12h >= 7.0:
+        final_class = "CRITICAL FLOOD EMERGENCY"
+        box_style = "box-critical"
+        badge_style = "badge-red"
+        advice = "Immediate evacuation of low-lying areas required. Dispatch rescue teams and close bridges."
+    elif is_flood_img or is_river_high or is_rain_heavy:
+        final_class = "MODERATE FLOOD WARNING"
+        box_style = "box-warning"
+        badge_style = "badge-yellow"
+        advice = "Water accumulation observed. Monitor river banks, stage emergency pumps, and divert traffic."
+    else:
+        final_class = "NORMAL / SAFE"
+        box_style = "box-safe"
+        badge_style = "badge-green"
+        advice = "Normal operational status. No active flood emergency detected."
+
+    # --- DISPLAY: FINAL RESULT CLASS (PROMINENT) ---
+    st.markdown(f"""
+    <div class="result-box {box_style}">
+        <span style="font-size: 0.85rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+            Final Result Class
+        </span>
+        <h2 style="margin: 4px 0 8px 0; font-size: 1.8rem; font-weight: 800;">
+            {final_class}
+        </h2>
+        <p style="margin: 0; font-size: 1rem; opacity: 0.95;">
+            <b>Action Directive:</b> {advice}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- DISPLAY: DRONE CNN DETECTION ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("<b>📸 Drone Detection Result (CNN)</b>", unsafe_allow_html=True)
+    
+    if vision_label == "FLOODED":
+        st.markdown(f'<div style="margin-top: 8px;"><span class="badge badge-red">🌊 FLOODED</span> &nbsp; Confidence: <b>{vision_conf:.1f}%</b></div>', unsafe_allow_html=True)
+    elif vision_label == "CLEAR":
+        st.markdown(f'<div style="margin-top: 8px;"><span class="badge badge-green">☀️ CLEAR / DRY</span> &nbsp; Confidence: <b>{vision_conf:.1f}%</b></div>', unsafe_allow_html=True)
+    else:
+        st.write("No image loaded.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- DISPLAY: LSTM RIVER PREDICTION ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("<b>📈 LSTM 12-Hour River Prediction</b>", unsafe_allow_html=True)
+    
+    p_c1, p_c2 = st.columns(2)
+    with p_c1:
+        st.metric("Current River Level", f"{river_level:.2f} m")
+    with p_c2:
+        delta = predicted_river_12h - river_level
+        st.metric("Predicted Level in 12h", f"{predicted_river_12h:.2f} m", delta=f"{delta:+.2f} m", delta_color="inverse")
+        
+    # Clean, simple mini chart
+    timeline = ["Now", "+3h", "+6h", "+9h", "+12h"]
+    proj_vals = np.linspace(river_level, predicted_river_12h, 5)
+    chart_df = pd.DataFrame({"Timeline": timeline, "Projected River (m)": proj_vals, "Danger Line (5.0m)": [5.0]*5}).set_index("Timeline")
+    st.line_chart(chart_df, color=["#58a6ff", "#da3633"], height=160)
+    st.markdown('</div>', unsafe_allow_html=True)

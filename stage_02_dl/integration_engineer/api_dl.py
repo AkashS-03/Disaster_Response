@@ -5,38 +5,28 @@ import numpy as np
 from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List
-import json
-import re
 
 import sys
 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(base_dir)
 
 from dl_engineer.time_series_forecaster import FloodLSTM, inverse_transform_river
-from dl_engineer.nlp_classifier import TranscriptGRU, tokenize
 from torchvision import transforms, models
 import torch.nn as nn
 from PIL import Image
 import io
 
-app = FastAPI(title="Disaster Response DL API")
+app = FastAPI(title="Disaster Response DL API (Vision & Hydrological Forecaster)")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# --- Load LSTM ---
+# --- Load LSTM Forecaster ---
 lstm_model = FloodLSTM(input_size=4, hidden_size=64, num_layers=2).to(device)
 lstm_model.load_state_dict(torch.load(os.path.join(base_dir, "models", "lstm_forecaster.pth"), map_location=device, weights_only=True))
 lstm_model.eval()
 ts_scaler = joblib.load(os.path.join(base_dir, "data", "time_series", "ts_scaler.joblib"))
 
-# --- Load NLP ---
-with open(os.path.join(base_dir, "models", "vocab.json"), "r") as f:
-    vocab = json.load(f)
-nlp_model = TranscriptGRU(vocab_size=len(vocab), embed_dim=64, hidden_dim=32, num_classes=3).to(device)
-nlp_model.load_state_dict(torch.load(os.path.join(base_dir, "models", "nlp_classifier.pth"), map_location=device, weights_only=True))
-nlp_model.eval()
-
-# --- Load Vision ---
+# --- Load Drone Vision CNN (MobileNetV2) ---
 vision_model = models.mobilenet_v2()
 vision_model.classifier[1] = nn.Linear(vision_model.last_channel, 2)
 vision_model.load_state_dict(torch.load(os.path.join(base_dir, "models", "vision_classifier.pth"), map_location=device, weights_only=True))
@@ -52,16 +42,13 @@ vision_transform = transforms.Compose([
 class ForecastRequest(BaseModel):
     sequence: List[List[float]] 
 
-class NLPRequest(BaseModel):
-    transcript: str
-
 @app.get("/health")
 def health():
-    return {"status": "DL Backend Active"}
+    return {"status": "DL Backend Active (Vision & LSTM only)"}
 
 @app.post("/dl/forecast")
 def forecast_river_level(req: ForecastRequest):
-    seq = np.array(req.sequence) # shape (48, 4)
+    seq = np.array(req.sequence)  # shape (48, 4)
     if seq.shape != (48, 4):
         return {"error": f"Expected sequence shape (48, 4), got {seq.shape}"}
     
@@ -72,29 +59,11 @@ def forecast_river_level(req: ForecastRequest):
         out = lstm_model(seq_tensor)
     
     pred_scaled = out.cpu().numpy()
-    
     dummy = np.zeros((1, 4))
     dummy[0, 0] = pred_scaled[0, 0]
     pred_real = ts_scaler.inverse_transform(dummy)[0, 0]
     
     return {"predicted_river_level_12h": float(pred_real)}
-
-@app.post("/dl/text")
-def analyze_text(req: NLPRequest):
-    words = tokenize(req.transcript)
-    seq = [vocab.get(w, 1) for w in words]
-    if len(seq) < 30:
-        seq = seq + [0] * (30 - len(seq))
-    else:
-        seq = seq[:30]
-        
-    seq_tensor = torch.tensor([seq], dtype=torch.long).to(device)
-    with torch.no_grad():
-        out = nlp_model(seq_tensor)
-        pred = torch.argmax(out, dim=1).item()
-        
-    mapping = {0: "LOW", 1: "MODERATE", 2: "SEVERE"}
-    return {"severity": mapping[pred]}
 
 @app.post("/dl/vision")
 async def analyze_vision(file: UploadFile = File(...)):

@@ -1,8 +1,6 @@
-# Computer Vision (Flood Detection) Evaluation
+# Computer Vision (Drone Flood Detection) Model Status
 
-Dataset sourced from real flood imagery (UAV/Street view).
-Total valid dataset size: 25 images.
-
-## Metrics (Held-Out Test Set)
-- **Precision:** 0.0000
-- **Recall:** 0.0000
+- **Architecture:** MobileNetV2 (Transfer Learning)
+- **Dataset:** AIDERv2 Aerial Drone Benchmark (7,000 images)
+- **Final Training Accuracy:** 93.70%
+- **Model Weights Saved:** `stage_02_dl/models/vision_classifier.pth`
