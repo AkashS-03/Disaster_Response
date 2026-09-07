@@ -1,0 +1,23 @@
+CNN (Flood Detection — MobileNetV2)
+Step	What we do
+1. Confusion matrix	flooded vs clear — TP/FP/FN/TN breakdown
+2. Per-class Precision/Recall/F1	each class separately, not one number
+3. Edge-case images	borderline images: "wet asphalt that looks flooded", "shallow water that isn't" — model must not over-react
+4. Dataset audit	class counts + balance check (current failure: 2 flooded / 23 clear)
+5. Leave-one-out check (only if dataset still tiny)	retrain on n-1, predict held-out image — honest number when data is small
+Verdict: PASS if flooded-recall is solid + edge cases mostly right + sizes ≥ 20/class. FAIL if precision & recall both = 0.
+
+LSTM (River-Level Forecast — 12h ahead)
+Step	What we do
+1. Baseline gating	recompute naive + XGBoost; LSTM must beat them or it's worthless
+2. MAE / MSE	overall error in level units (independent, not from training report)
+3. Error by river-level band	calm vs rising vs high — is it wrong exactly when it matters?
+4. Worst-case analysis	top-10 biggest errors + when they happen (evacuation safety)
+5. Beats-naive fraction	% of samples where LSTM beats the "stays the same" guess
+6. Multi-horizon gap (flagged only)	3h/6h models don't exist — note the gap, don't fake it
+Verdict: PASS if MAE < naive, beats-naive > 50%, no catastrophic high-river errors.
+
+Outputs we deliver when you say go
+eval_vision.py + eval_forecasting.py — independent scripts (load checkpoints, run our own tests)
+indep_vision_eval_report.md + indep_forecasting_eval_report.md (+ combined scorecard)
+PASS / FAIL / CONDITIONAL verdict per model with evidence lines for your presentation
