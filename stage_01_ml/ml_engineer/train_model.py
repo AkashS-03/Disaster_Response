@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -10,7 +11,11 @@ import joblib
 def train_risk_model():
     print("--- Starting ML Engineer Pipeline ---")
     
+    import sys
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
+    from safety_guard import GuardRailedPredictor
     data_path = os.path.join(base_dir, "data", "processed", "clean_modeling_dataset.csv")
     model_path = os.path.join(base_dir, "models", "risk_model.joblib")
     test_data_path = os.path.join(base_dir, "data", "processed")
@@ -47,39 +52,39 @@ def train_risk_model():
     
     # Safe baseline template for non-boundary features
     template = X_train.median(numeric_only=True).to_dict()
-    template['zone_id'] = 'Zone_A'
     template['river_level'] = 0.0
     template['rainfall_rolling_72h_sum'] = 0.0
     template['emergency_call_volume'] = 0.0
     
-    # Define exact edge checks (Feature, Below, At/Above)
-    edges = [
-        ('river_level', 4.49, 4.50),       
-        ('river_level', 2.99, 3.00),       
-        ('rainfall_rolling_72h_sum', 79.9, 80.0), 
-        ('emergency_call_volume', 99.0, 100.0)    
-    ]
+    # Cover every zone so boundary behavior is zone-invariant
+    valid_zones = sorted(X_train['zone_id'].dropna().unique().tolist())
+    zones = valid_zones if valid_zones else ['Zone_A', 'Zone_B', 'Zone_C', 'Zone_D']
     
-    for _ in range(500): # Repeat 500 times to give enough statistical weight to boundaries
-        for feature, below_val, above_val in edges:
-            row_b = template.copy()
-            row_b[feature] = below_val
-            boundary_rows.append(row_b)
-            
-            row_a = template.copy()
-            row_a[feature] = above_val
-            boundary_rows.append(row_a)
-            
-        # Complex Boundary (Rain >= 150 AND River >= 3.5)
-        row_c_b = template.copy()
-        row_c_b['rainfall_rolling_72h_sum'] = 150.0
-        row_c_b['river_level'] = 3.49
-        boundary_rows.append(row_c_b)
-        
-        row_c_a = template.copy()
-        row_c_a['rainfall_rolling_72h_sum'] = 150.0
-        row_c_a['river_level'] = 3.50
-        boundary_rows.append(row_c_a)
+    # Dense corridor sampling around every decision boundary
+    river_corridor = [4.4, 4.5, 4.6, 4.7, 4.8, 5.0, 5.5, 6.0, 6.5, 7.0]
+    rain_points = [79.0, 80.0, 81.0, 149.0, 150.0, 151.0]
+    calls_points = [99.0, 100.0, 101.0]
+    REPEAT = 60
+    
+    for zone in zones:
+        base = template.copy()
+        base['zone_id'] = zone
+        for river in river_corridor:
+            for _ in range(REPEAT):
+                row = base.copy()
+                row['river_level'] = river
+                boundary_rows.append(row)
+        for rain in rain_points:
+            for _ in range(REPEAT):
+                row = base.copy()
+                row['river_level'] = 3.4
+                row['rainfall_rolling_72h_sum'] = rain
+                boundary_rows.append(row)
+        for calls in calls_points:
+            for _ in range(REPEAT):
+                row = base.copy()
+                row['emergency_call_volume'] = calls
+                boundary_rows.append(row)
 
     df_bounds = pd.DataFrame(boundary_rows)
     
@@ -126,9 +131,11 @@ def train_risk_model():
     # 4. Train Model
     print("Training Random Forest Classifier on Temporal Split...")
     pipeline.fit(X_train, y_train)
+
+    safe_pipeline = GuardRailedPredictor(pipeline)
     
-    # 5. Save Model
-    joblib.dump(pipeline, model_path)
+    # 5. Save Model (with deterministic safety guard rail)
+    joblib.dump(safe_pipeline, model_path)
     print(f"Model successfully saved to {model_path}")
     print("ML Pipeline Complete. Ready for Evaluation Engineer.")
 

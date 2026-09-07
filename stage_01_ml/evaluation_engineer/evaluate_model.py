@@ -4,11 +4,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import joblib
-
 def evaluate_risk_model():
     print("--- Starting Evaluation Engineer Pipeline ---")
     
+    import sys
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
+    import safety_guard  # noqa: F401 – needed so joblib can unpickle GuardRailedPredictor
     test_x_path = os.path.join(base_dir, "data", "processed", "X_test.csv")
     test_y_path = os.path.join(base_dir, "data", "processed", "y_test.csv")
     model_path = os.path.join(base_dir, "models", "risk_model.joblib")

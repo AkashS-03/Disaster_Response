@@ -48,7 +48,7 @@ def run_independent_forecasting_eval():
     y_test = np.load(y_test_path)
     scaler = joblib.load(scaler_path)
 
-    # Inverse transform helper (Feature 0: River Level in meters)
+    # Inverse transform helper (Feature 0: River Level — raw index, not meters)
     def inverse_river_level(scaled_arr):
         dummy = np.zeros((len(scaled_arr), 4))
         dummy[:, 0] = scaled_arr.flatten()
@@ -57,7 +57,7 @@ def run_independent_forecasting_eval():
     y_true = inverse_river_level(y_test)
     n_samples = len(y_true)
     print(f"Loaded held-out test set: {n_samples} sequence windows (24h lookback -> 12h horizon)")
-    print(f"Ground Truth Level Range: Min={y_true.min():.2f}m, Max={y_true.max():.2f}m, Mean={y_true.mean():.2f}m, Std={y_true.std():.2f}m")
+    print(f"Ground Truth Level Range: Min={y_true.min():.2f}, Max={y_true.max():.2f}, Mean={y_true.mean():.2f}, Std={y_true.std():.2f}")
 
     # -------------------------------------------------------------
     # STEP 1: Baseline Gating (Naive Persistence + XGBoost)

@@ -3,8 +3,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
-
-
 def create_edge_case_scenarios():
     """
     Create borderline scenarios at decision boundaries.
@@ -17,6 +15,7 @@ def create_edge_case_scenarios():
     We test just below and just above each boundary.
     """
     base_features = {
+        'river_level': 2.0,
         'rainfall': 0.0,
         'emergency_call_volume': 10,
         'road_closures': 0,
@@ -133,7 +132,11 @@ def run_edge_case_tests():
     """
     print("--- Starting Edge Case Testing ---")
     
+    import sys
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
+    import safety_guard  # noqa: F401 – needed so joblib can unpickle GuardRailedPredictor
     model_path = os.path.join(base_dir, "models", "risk_model.joblib")
     fig_dir = os.path.join(base_dir, "reports", "figures")
     os.makedirs(fig_dir, exist_ok=True)

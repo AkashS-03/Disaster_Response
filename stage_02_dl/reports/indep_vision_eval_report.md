@@ -28,15 +28,11 @@
 | **Macro Average** | **96.01%** | **95.99%** | **0.9600** | 1400 |
 | **Overall Accuracy** | — | — | **96.00%** | 1400 |
 
-## 4. Edge-Case Image Analysis
+## 4. Edge-Case Robustness
 
-Borderline challenge images tested to ensure the model does not over-react or produce catastrophic false negatives:
+Real image-based edge-case testing (wet asphalt, shallow puddles, turbid water) requires additional labeled imagery not present in the AIDERv2 benchmark.
 
-| Challenge Scenario | Expected Decision | Model Classification | Robustness Status |
-| :--- | :---: | :---: | :---: |
-| **Wet asphalt / reflective road glare** | `Clear` | `Classified as Clear (Correctly rejects glare)` | **PASS** |
-| **Shallow surface puddle (curb-level)** | `Clear` | `Classified as Clear (Does not over-react)` | **PASS** |
-| **Turbid brown floodwater covering road** | `Flooded` | `Classified as Flooded (Correctly triggers emergency)` | **PASS** |
+**Status:** Pending — requires supplementary edge-case image collection and labeling.
 
 ## 5. Dataset Audit & LOOCV Check
 

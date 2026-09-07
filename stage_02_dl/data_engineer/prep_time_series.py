@@ -7,6 +7,10 @@ from sklearn.preprocessing import StandardScaler
 def prepare_time_series():
     print("--- Starting Time-Series Data Prep ---")
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    # NOTE: We intentionally use master_dataset (not clean_modeling_dataset) for time-series
+    # forecasting. The clean_dataset caps river_level at 20.0m for classification, which
+    # destroys all variance in high-water test periods (all values become 20.0m).
+    # Master values use an unscaled index; the model learns patterns regardless of units.
     ml_data_path = os.path.join(base_dir, "..", "stage_01_ml", "data", "processed", "master_dataset.csv")
     out_dir = os.path.join(base_dir, "data", "time_series")
     os.makedirs(out_dir, exist_ok=True)
