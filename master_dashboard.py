@@ -17,8 +17,11 @@ from torchvision import transforms, models
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STAGE_01_DIR = os.path.join(BASE_DIR, "stage_01_ml")
 STAGE_02_DIR = os.path.join(BASE_DIR, "stage_02_dl")
+STAGE_03_DIR = os.path.join(BASE_DIR, "stage_03_nlp")
 if STAGE_01_DIR not in sys.path:
     sys.path.insert(0, STAGE_01_DIR)
+if STAGE_03_DIR not in sys.path:
+    sys.path.insert(0, STAGE_03_DIR)
 import safety_guard  # noqa: F401 – enables joblib to unpickle GuardRailedPredictor
 
 # =============================================================================
@@ -189,6 +192,9 @@ st.markdown("""
     .color-severe { color: #fca5a5; text-shadow: 0 0 12px rgba(239,68,68,0.6); }
     .color-moderate { color: #fde68a; text-shadow: 0 0 12px rgba(245,158,11,0.6); }
     .color-low { color: #86efac; text-shadow: 0 0 12px rgba(34,197,94,0.6); }
+    .color-review { color: #c4b5fd; text-shadow: 0 0 12px rgba(139,92,246,0.6); }
+    .res-review { background: rgba(139,92,246,0.08); border-color: rgba(139,92,246,0.4); }
+    .dir-human  { background: rgba(139,92,246,0.10); border-color: rgba(139,92,246,0.40); color:#e9e3ff; }
 
     /* GUARD RAIL BANNER */
     .guard-banner {
@@ -249,6 +255,29 @@ st.markdown("""
     }
     [data-testid="stSlider"] [role="slider"] { background:#38bdf8; box-shadow:0 0 12px rgba(56,189,248,0.8); }
     .stSelectbox [data-baseweb="select"] > div { background:rgba(16,25,48,0.6) !important; border-radius:10px !important; }
+
+    /* NATIVE WIDGET THEME FORCE (dark mission-control) */
+    [data-testid="stTextArea"] textarea,
+    .stTextArea textarea {
+        background-color: rgba(16,25,48,0.9) !important;
+        color: #e2e8f0 !important;
+        caret-color: #38bdf8 !important;
+        border-color: rgba(90,140,255,0.35) !important;
+        font-family: 'Sora', sans-serif;
+    }
+    [data-testid="stTextArea"] textarea::placeholder {
+        color: #64748b !important;
+    }
+    [data-testid="stNumberInput"] input,
+    .stNumberInput input {
+        background-color: rgba(16,25,48,0.9) !important;
+        color: #e2e8f0 !important;
+        caret-color: #38bdf8 !important;
+    }
+    [data-testid="stTextArea"] label,
+    [data-testid="stNumberInput"] label {
+        color: #cbd5e1 !important;
+    }
 
     /* FILE UPLOADER */
     [data-testid="stFileUploaderDropzone"] {
@@ -361,6 +390,19 @@ def load_all_models():
         models_dict['vision'] = None
         models_dict['v_transform'] = None
 
+    # 4. NLP Triage (Stage 3 - real-text severity triage)
+    nlp_winner = os.path.join(STAGE_03_DIR, "models", "winner.txt")
+    if os.path.exists(nlp_winner):
+        try:
+            from integration_engineer.nlp_triage import build_triage
+            models_dict['nlp'] = build_triage(
+                os.path.join(STAGE_03_DIR, "models"), threshold=0.50, with_deep=True)
+        except Exception as e:
+            models_dict['nlp'] = None
+            print(f"Error loading NLP triage model: {e}")
+    else:
+        models_dict['nlp'] = None
+
     return models_dict
 
 MODELS = load_all_models()
@@ -402,19 +444,20 @@ st.markdown(f"""
 </div>
 
 <div class="hero">
-    <div class="kicker">Stage 01 ML & Stage 02 Deep Learning Unified Platform</div>
+    <div class="kicker">Stage 01 ML · Stage 02 Deep Learning · Stage 03 NLP Unified Platform</div>
     <h1><span class="grad">Disaster Response Operations</span></h1>
-    <div class="subtitle">Predict flood risk tiers, detect aerial inundation, and forecast hydrological river dynamics with zero congestion.</div>
+    <div class="subtitle">Predict flood risk tiers, detect aerial inundation, triage emergency text reports, and forecast hydrological river dynamics with zero congestion.</div>
 </div>
 """, unsafe_allow_html=True)
 
 # =============================================================================
 # MODULAR SECTION TABS (Eliminates Congestion)
 # =============================================================================
-tab_ml, tab_vision, tab_ts, tab_overview = st.tabs([
+tab_ml, tab_vision, tab_ts, tab_nlp, tab_overview = st.tabs([
     "🤖 Stage 01: ML Risk Classifier",
     "📸 Stage 02: Aerial Drone Vision",
     "📈 Stage 02: Time-Series Forecaster",
+    "💬 Stage 03: NLP Message Triage",
     "🌐 Unified Command Center"
 ])
 
@@ -488,7 +531,7 @@ with tab_ml:
 
         with st.expander("🛠️ Advanced Cumulative & Rolling Telemetry"):
             s1_rain_72 = st.number_input("72h Cumulative Rainfall (mm)", 0.0, 600.0, float(max(s1_rain * 3.2, 70.0)))
-            s1_calls_24 = st.number_input("24h Emergency Calls Sum", 0, 2000, int(s1_calls * 14))
+            s1_calls_24 = st.number_input("24h Emergency Calls Sum", 0, 2000, int(min(s1_calls * 14, 2000)))
             s1_river_avg72 = st.number_input("72h Rolling River Level Average (m)", 0.0, 15.0, float(max(1.0, s1_river - 0.3)))
             s1_trend = st.slider("1-Hour River Level Trend (m/hr)", -2.0, 3.0, 0.25, 0.05)
 
@@ -842,7 +885,120 @@ with tab_ts:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 4: UNIFIED INCIDENT COMMAND CENTER (MULTI-MODAL OVERVIEW)
+# TAB 4: STAGE 03 — NLP MESSAGE TRIAGE (REAL-TEXT SEVERITY)
+# =============================================================================
+with tab_nlp:
+    st.markdown('<div class="panel-title"><span class="badge">STAGE 03</span> NLP Agent: Real-Time Emergency Message Triage (LOW / MODERATE / SEVERE)</div>', unsafe_allow_html=True)
+
+    col_nlp_in, col_nlp_out = st.columns([1.1, 1.1], gap="large")
+
+    with col_nlp_in:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title"><span class="badge">MESSAGE</span> Emergency Text / SOS Report Input</div>', unsafe_allow_html=True)
+
+        if "sos_input" not in st.session_state:
+            st.session_state["sos_input"] = ("Water level is rising in our area, "
+                                             "houses flooded, need food and water.")
+
+        sample_btns = st.columns(3)
+        if sample_btns[0].button("🚨 Severe", use_container_width=True, key="nlp_s_severe"):
+            st.session_state["sos_input"] = ("People are trapped on the roof of the colony and flood water is "
+                                            "rising fast. A child is injured and we need rescue immediately.")
+        if sample_btns[1].button("🌊 Moderate", use_container_width=True, key="nlp_s_mod"):
+            st.session_state["sos_input"] = ("Flood water has entered homes in the eastern ward. Shelter opened, "
+                                            "residents are being evacuated to higher ground.")
+        if sample_btns[2].button("☀️ Low", use_container_width=True, key="nlp_s_low"):
+            st.session_state["sos_input"] = ("Market reopened today, roads are clear and buses are running "
+                                            "on schedule as usual.")
+
+        nlp_msg = st.text_area(
+            "Paste an emergency report / SOS message",
+            height=150, key="sos_input",
+            placeholder="e.g. 'Heavy flooding and people trapped in building, please help...'")
+
+        nlp_model_choice = st.radio(
+            "Statistical engine", ["Classical (interpretable)", "Deep (BiLSTM + attention)"],
+            index=0, horizontal=True,
+            help="Both were trained on real data and compared by macro-F1; the classical model is the "
+                 "baseline-gated winner and is used for the deployed verdict.")
+        use_deep = nlp_model_choice.startswith("Deep")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_nlp_out:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title"><span class="badge">TRIAGE</span> Automated Severity Assessment (guard-rail & human-review enabled)</div>', unsafe_allow_html=True)
+
+        nlp_pred = "UNKNOWN"
+        nlp_conf = 0.0
+        nlp_guard_hits = []
+        nlp_reason = ""
+
+        if MODELS['nlp'] is not None and nlp_msg.strip():
+            try:
+                res = MODELS['nlp'].triage(nlp_msg, use_deep=use_deep)
+                nlp_pred = res["prediction"]
+                nlp_conf = res["confidence"] * 100.0
+                nlp_guard_hits = res.get("guard_hits") or []
+                nlp_reason = res.get("reason", "")
+            except Exception as e:
+                st.error(f"NLP Inference Error: {e}")
+        elif MODELS['nlp'] is None:
+            st.warning("NLP triage model not loaded (run stage_03_nlp pipeline first).")
+
+        if nlp_pred == "SEVERE":
+            n_cls, n_badge, n_icon = "res-severe", "color-severe", "🚨"
+            n_dir, n_msg = "dir-critical", ("<b>CRITICAL TRIAGE:</b> Emergency message signals an active, "
+                                            "life-threatening situation. Escalate to immediate rescue dispatch.")
+        elif nlp_pred == "MODERATE":
+            n_cls, n_badge, n_icon = "res-moderate", "color-moderate", "🌊"
+            n_dir, n_msg = "dir-warning", ("<b>MODERATE TRIAGE:</b> Real hazard / aid-need reported. Route to "
+                                           "sector response team for verification and resource staging.")
+        elif nlp_pred == "LOW":
+            n_cls, n_badge, n_icon = "res-low", "color-low", "☀️"
+            n_dir, n_msg = "dir-safe", ("<b>LOW TRIAGE:</b> Information-only or non-emergency report. "
+                                        "No immediate escalation required.")
+        elif nlp_pred == "REVIEW":
+            n_cls, n_badge, n_icon = "res-review", "color-review", "🧑‍💼"
+            n_dir, n_msg = "dir-human", ("<b>HUMAN TRIAGE REQUIRED:</b> Model confidence was below the safety "
+                                         "threshold and no determinisic keyword fired. Escalated to a human "
+                                         "operator instead of guessing.")
+        else:
+            n_cls, n_badge, n_icon = "", "", "❓"
+            n_dir, n_msg = "", "Awaiting an emergency message for NLP triage."
+
+        st.markdown(f"""
+        <div class="result-card {n_cls}">
+            <div style="font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:#94a3b8; margin-bottom:4px;">
+                NLP Severity Verdict · {nlp_model_choice.split('(')[0].strip()}</div>
+            <div class="result-badge {n_badge}">{n_icon} {nlp_pred}</div>
+            <div style="font-size:1.0rem; font-weight:700; margin-top:8px; color:#e2e8f0;">Model Confidence: {nlp_conf:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.progress(min(max(nlp_conf / 100.0, 0.0), 1.0))
+
+        if nlp_guard_hits:
+            st.markdown(
+                f'<div style="font-size:0.82rem; color:#fde68a; margin-top:6px;">⚡ <b>GUARD-RAIL TRIGGERS:</b> '
+                f'{", ".join(f"<code>{k}</code>" for k in nlp_guard_hits)}</div>',
+                unsafe_allow_html=True)
+        if nlp_reason:
+            st.caption(f"Decision basis: {nlp_reason}")
+
+        if n_dir:
+            st.markdown(f"""
+            <div class="directive {n_dir}">
+                <div style="font-size:1.3rem;">{n_icon if n_icon != '❓' else '💬'}</div>
+                <div>{n_msg}<br><br><b>Tactical Action:</b> Route message to the triage queue shown above
+                for coordinator confirmation.</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# =============================================================================
+# TAB 5: UNIFIED INCIDENT COMMAND CENTER (MULTI-MODAL OVERVIEW)
 # =============================================================================
 with tab_overview:
     st.markdown('<div class="panel-title"><span class="badge">FUSION</span> Multi-Agent Emergency Operations Synthesis</div>', unsafe_allow_html=True)
@@ -932,6 +1088,12 @@ with tab_overview:
                 <td><b>Stage 02 Time-Series</b></td>
                 <td>Residual FloodLSTM (12h)</td>
                 <td style="text-align:center;"><span style="font-weight:700;">{peak_12h:.2f}m peak</span></td>
+                <td style="text-align:right; color:#22d3ee;">Operational</td>
+            </tr>
+            <tr style="height: 48px;">
+                <td><b>Stage 03 NLP</b></td>
+                <td>TF-IDF + LogReg (guard rail)</td>
+                <td style="text-align:center;"><span style="color:{"#f87171" if nlp_pred=="SEVERE" else ("#fde68a" if nlp_pred=="MODERATE" else ("#c4b5fd" if nlp_pred=="REVIEW" else "#86efac"))}; font-weight:700;">{nlp_pred}</span></td>
                 <td style="text-align:right; color:#22d3ee;">Operational</td>
             </tr>
         </table>

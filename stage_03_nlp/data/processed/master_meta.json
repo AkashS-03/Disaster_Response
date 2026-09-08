@@ -1,0 +1,18 @@
+{
+  "rows": 33791,
+  "train": 27032,
+  "test": 6759,
+  "sources": {
+    "figure_eight": 26178,
+    "kaggle_disaster_tweets": 7613
+  },
+  "severity": {
+    "LOW": 15908,
+    "MODERATE": 14335,
+    "SEVERE": 3548
+  },
+  "is_crisis": {
+    "1": 23345,
+    "0": 10446
+  }
+}
