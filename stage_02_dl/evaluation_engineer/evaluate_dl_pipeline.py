@@ -7,7 +7,6 @@ def audit_dl_evaluations():
     
     expected_reports = [
         "forecasting_report.md",
-        "nlp_evaluation_report.md",
         "vision_evaluation_report.md"
     ]
     

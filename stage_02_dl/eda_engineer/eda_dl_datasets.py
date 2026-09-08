@@ -6,15 +6,7 @@ def analyze_dl_datasets():
     print("--- EDA Engineer (Deep Learning) ---")
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     
-    # 1. NLP EDA
-    nlp_path = os.path.join(base_dir, "data", "nlp", "synthetic_transcripts.csv")
-    if os.path.exists(nlp_path):
-        df = pd.read_csv(nlp_path)
-        print("\n[NLP] Transcript Severity Distribution:")
-        print(df['severity'].value_counts())
-        print(f"Total transcripts: {len(df)}")
-        
-    # 2. Time-Series EDA
+    # 1. Time-Series EDA
     ts_path = os.path.join(base_dir, "data", "time_series", "X_train.npy")
     ts_test_path = os.path.join(base_dir, "data", "time_series", "X_test.npy")
     if os.path.exists(ts_path):
@@ -23,7 +15,7 @@ def analyze_dl_datasets():
         print(f"\n[Time-Series] Train Windows (Sequences, Timesteps, Features): {x_train.shape}")
         print(f"[Time-Series] Test Windows (Sequences, Timesteps, Features): {x_test.shape}")
         
-    # 3. Vision EDA
+    # 2. Vision EDA
     vision_flood = os.path.join(base_dir, "data", "vision", "flooded")
     vision_clear = os.path.join(base_dir, "data", "vision", "clear")
     if os.path.exists(vision_flood) and os.path.exists(vision_clear):
