@@ -113,3 +113,32 @@ Why? Absolute levels are in a narrow range; the *change* is a small, learnable q
 4. **What is an LSTM?** — Long Short-Term Memory: a recurrent network that remembers patterns over time via gated memory cells — ideal for time-series.
 5. **How do you prevent temporal leakage?** — Chronological split with a gap + train-only scaler + strict no-overlap assertion.
 6. **Why CONDITIONAL PASS on the forecast?** — Good MAE but 157 catastrophic underestimates in high-water stages = can't fully trust for evacuation; disclosed honestly.
+
+## SLM: Detailed Explanation & My Role Facts (Role 8 tie-in)
+
+### What the SLM is (DL view)
+The SLM is a **2-layer LSTM language model** I can explain layer by layer — vocabulary embeddings → two LSTM layers → a final linear layer that scores every word in the vocab.
+
+### The architecture in detail
+| Building block | What it does | Size |
+| :--- | :--- | :---: |
+| **Embedding (`nn.Embedding`)** | looks up a learned **128-number vector** for each of the 16,004 token IDs — words that behave alike get similar vectors | 16,004 × 128 |
+| **LSTM layer 1** | reads token vectors left→right, keeping a **hidden state** that carries "what I've seen so far" | hidden 128 |
+| **LSTM layer 2** | stacks on top to learn higher-level patterns (e.g. verb→object relationships) | hidden 128 |
+| **Dropout(0.2)** | randomly disables connections during training so the model generalises instead of memorising | — |
+| **Linear head + softmax** | maps the last hidden state to a **probability over the whole 16,004-word vocabulary** | 128 → 16,004 |
+
+**Training objective (cross-entropy):** for every position in every real window, the model is asked to assign high probability to the *actual next word* and low probability to everything else. Lower loss = less surprise. Numbers: loss **7.62 → 5.72** over 12 epochs; random guessing would be ≈ `ln(16004) ≈ 9.68`, so the model is measurably learning real patterns (the language-model equivalent of "better than a coin flip, by a clear margin, on the training distribution").
+
+### Why LSTM and not a Transformer (the question everyone will ask)
+- Transformers shine with **hundreds of millions of tokens on a GPU**. We have **33,791 messages on a CPU** — a Transformer would overfit and gain nothing.
+- LSTMs are **small (~17.5 MB), CPU-friendly, offline**, and every gate is explainable. For field deployment (floods kill networks), that is a feature, not a compromise.
+- Self-attention adds explainability cost with no benefit at our data scale. We say this plainly instead of pretending we built a frontier model.
+
+### How the SLM "encodes" a message (used by Track C)
+`encode(x)` runs the tokens through the LSTM and takes the **hidden state at the last real (non-pad) token**. That vector (128 dims) is a learned, context-aware representation of the whole message. A classifier *head* — Linear 128→ReLU→Dropout→Linear 3 — is then trained on top. That head is what we evaluator and what failed the gate (macro-F1 0.3523).
+
+### Likely SLM questions for the DL Engineer
+1. **"How do you prevent the LSTM from memorising the training messages?"** — Dropout, a modest 12 epochs, a frequency-pruned vocab (rare mysteries collapse to `<unk>`), and next-word (not sequence-recall) supervision all push toward generalisation — and Track C's honest failure on unseen test data is evidence we didn't overfit a classifier.
+2. **"What does 'hidden state 128' mean?"** — Each LSTM cell keeps 128 numbers of memory about the sentence so far; stacked twice, it combines two levels of pattern abstraction. It's a capacity knob we sized for a 33K-message corpus, not a magic number.
+3. **"Why does the encoded last-token representation fail as a classifier?"** — It summarises the whole sentence into one vector for a *language* task; severity labels depend on sparse *keywords*, which is precisely what TF-IDF captures. That mismatch is why expected Track C to be an open research question and why we gated it instead of assuming it works.

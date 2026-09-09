@@ -171,12 +171,37 @@ Why not a clean PASS? The *raw statistical model* alone misses the quality gates
    - Else if confidence < 0.50 → **REVIEW** (human).
    - Else → the model's class.
 5. The dashboard renders the coloured card + directive ("CRITICAL TRIAGE — Escalate to immediate rescue dispatch").
+6. The **entity extractor** reads the same message and pulls the "what + where + how many": people counts, location phrases, and detail flags — shown as a **Detected Entities** panel of chips under the verdict.
 
 Try it: paste *"people are trapped on the roof…"* → the statistical core is only ~41% confident, but the guard hits `trapped` + `please help` → **SEVERE**. Paste *"markets open, buses running"* → low confidence and no guard hits → **REVIEW**. That's the whole design showing off.
 
 ---
 
-## 10. Where it lives in the repo
+## 10. Entity clarification — the "what, where, how many" layer
+
+Severity class and confidence each answer one question: **how urgent?** But picture the coordinator: they see "SEVERE" and instantly need follow-ups — *how many people? where? who is hurt? do they need food?* That's what the **entity extractor** (`extract_entities`) answers, automatically, from the same message.
+
+It is a completely different technique from the two models above. The models are *learned* (data → math → decision). The entity extractor is **pure rules**: regular expressions + a dictionary of keywords. Think of it as a very smart find-and-replace that spots patterns like "a number followed by a person-word" and colour-codes the results.
+
+Three things it pulls (the dashboard renders them as chips):
+
+| We extract | Example | The rule |
+| :--- | :--- | :--- |
+| 👥 People counts | `150 people`, `3 children`, `30 families`, `hundreds of villagers` | "number + person/group word", or "dozens/hundreds of + word" |
+| 📍 Location | `roof of the colony`, `Bandra station`, `eastern ward` | "in / at / near / on + a place phrase", plus a dictionary of place-words (ward, colony, road, station…) and known Mumbai areas |
+| 🔖 Details | `rescue needed`, `medical help`, `food & water`, `no electricity` | seven keyword groups → readable chips |
+
+Why build this instead of using a "real" NER library (e.g. spaCy)?
+
+- **No new dependency.** We're CPU-only; spaCy would add hundreds of MB of install for a demo system.
+- **Explainable.** A rule either fires or it doesn't — you can verify every chip by hand. A learned NER would be yet another black box to defend at the viva.
+- **Deterministic and testable.** Give it the same 20 messages and you get the same 20 answers, every run.
+
+The honest trade-off: a rule-based extractor only understands the phrasings its patterns were written for. *"30 souls are stuck upstairs"* will not count "30 people", because the message uses no known unit word; a learned model might catch it. We accept that limit and disclose it — better a transparent tool with known edges than a magical one we can't explain.
+
+---
+
+## 11. Where it lives in the repo
 
 | File | What it is |
 | :--- | :--- |
@@ -184,7 +209,7 @@ Try it: paste *"people are trapped on the roof…"* → the statistical core is 
 | `stage_03_nlp/dl_engineer/nlp_trainer.py` | trains BOTH tracks, picks + saves the winner |
 | `stage_03_nlp/models/severity_stat.joblib` | the shipped TF-IDF + Logistic Regression (1.4 MB) |
 | `stage_03_nlp/models/bilstm_severity.pth` | the BiLSTM + attention (9 MB) |
-| `stage_03_nlp/integration_engineer/nlp_triage.py` | guard rail + abstention + the dashboard's `triage()` |
+| `stage_03_nlp/integration_engineer/nlp_triage.py` | guard rail + abstention + entity extractor + the dashboard's `triage()` |
 | `Roles/Role7_NLP_Engineer.md` | the viva cheat-sheet for this stage |
 
 ---

@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import numpy as np
 
++
 def run_ingestion():
     print("--- Starting Data Engineer Pipeline (Real API Data) ---")
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

@@ -7,10 +7,10 @@ A plain-English cheat sheet covering every model, term, and number you'll need. 
 ## 1. The Big Picture (why does this project exist?)
 
 **Q: What is your project?**
-A: An autonomous multi-agent disaster-response coordination system. It uses machine learning to assess flood risk in real time from sensor data, deep learning (CNN) to detect flooding from drone images, deep learning (LSTM) to forecast river levels 12 hours ahead, and NLP to triage emergency text messages by severity. Everything is surfaced in one dashboard so emergency coordinators can act fast.
+A: An autonomous multi-agent disaster-response coordination system. It uses machine learning to assess flood risk in real time from sensor data, deep learning (CNN) to detect flooding from drone images, and deep learning (LSTM) to forecast river levels 12 hours ahead. Everything is surfaced in one dashboard so emergency coordinators can act fast.
 
 **Q: What is a "multi-agent" system?**
-A: Multiple specialised AI "agents" (roles) work together like a team — Data Engineer prepares data, ML Engineer classifies risk, DL Engineer detects floods and forecasts, NLP Engineer triages emergency messages, Evaluation Engineer independently audits, Integration Engineer wires it into a dashboard. Each has a clear job; together they form the full pipeline.
+A: Multiple specialised AI "agents" (roles) work together like a team — Data Engineer prepares data, ML Engineer classifies risk, DL Engineer detects floods and forecasts, Evaluation Engineer independently audits, Integration Engineer wires it into a dashboard. Each has a clear job; together they form the full pipeline.
 
 ---
 
@@ -105,41 +105,6 @@ A: Chronological split with a **gap** (train ends Aug 15, test starts Sep 1) + s
 
 ---
 
-## 3c. Stage 03 — NLP (Text Triage)
-
-**Q: What does Stage 03 do?**
-A: Reads real emergency messages (tweets, direct reports, news) and triages each as **LOW / MODERATE / SEVERE** — so coordinators see urgent messages instantly among thousands.
-
-**Q: What data?**
-A: **33,791 real messages** — Figure Eight disaster responses (26,180) + Kaggle "Disaster Tweets" (7,611). Stratified 80/20 split → train 27,032 / test 6,759. Labels are **derived** via disclosed rules (SEVERE = rescue/medical/death/missing; MODERATE = floods/storms/etc; LOW = rest) — disclosed honestly, not hidden.
-
-**Q: What models did you build?**
-A: Two tracks on identical data — let evidence decide, not hype:
-| Track | Model | Macro-F1 | SEVERE recall |
-| :--- | :--- | :---: | :---: |
-| A (shipped) | TF-IDF + Logistic Regression | **0.4242** | 0.3211 |
-| B | BiLSTM + attention | 0.4012 | **0.5915** |
-
-**Q: Why ship the Logistic Regression (baseline gating)?**
-A: The deep model must **clearly beat** the simple, interpretable one to justify its complexity. It wins SEVERE recall but loses macro-F1, so interpretability + safety layers win. The trade-off is disclosed, not hidden.
-
-**Q: What is the text guard rail?**
-A: Deterministic keyword floors evaluated **before** the statistical model — can only **escalate**, never downgrade: trapped/rescue/stranded/injured/SOS/baby → forced **SEVERE**; flood/storm/earthquake/evacuat/shelter → forced **MODERATE**. Fired on **2,251 / 6,759** test messages.
-
-**Q: What is abstention (human-in-the-loop)?**
-A: If confidence **< 0.50** the system returns **REVIEW** and a human operator decides — never guess on an emergency message. The dashboard shows it as a distinct purple "HUMAN TRIAGE REQUIRED" card.
-
-**Q: What did the guard rail + abstention achieve?**
-A: At threshold 0.50: auto coverage **67.4%**, macro-F1(auto) 0.4197, auto-accuracy 0.458, and **SEVERE handled (auto + human) 0.85**.
-
-**Q: Why CONDITIONAL PASS?**
-A: The raw statistical model is weak (auto-accuracy 0.458 < 0.55 gate, macro-F1 0.4197 < 0.45 gate) — but with the guard rail + abstention, SEVERE handling (0.85 ≥ 0.70) and coverage (≥ 55%) pass, making it usable as a triage aid. Label noise (derived severity) is disclosed as a limitation.
-
-**Q: What is attention in your BiLSTM?**
-A: Learned weights over the words — it tells us **which words drove the decision** (an explainability handle), and gives the deep track its SEVERE-recall edge.
-
----
-
 ## 4. Evaluation & Integrity (YOUR strongest selling point)
 
 **Q: Why did you have an Evaluation Engineer?**
@@ -210,30 +175,6 @@ A: A model is only useful if it **beats a trivial baseline**. For forecasting, t
 | Training windows | 21,560 |
 | Test windows | 5,616 |
 
-### Stage 03 — NLP: TF-IDF + LogisticRegression (shipped)
-| Parameter | Value |
-| :--- | :---: |
-| Vectorizer | TF-IDF, ngrams (1,2), min_df=5, sublinear_tf, ≤200K features |
-| Classifier | LogisticRegression (lbfgs) |
-| class_weight | balanced |
-| Abstention threshold | 0.50 (below → REVIEW / human) |
-| **Model file size** | **1.4 MB** (`severity_stat.joblib`) |
-| Test macro-F1 / SEVERE recall | 0.4242 / 0.3211 |
-
-### Stage 03 — BiLSTM + attention (deep track, not shipped)
-| Parameter | Value |
-| :--- | :---: |
-| Input | word indices, max length 64 |
-| Embedding | 128-dim (learned) |
-| BiLSTM | hidden 128, bidirectional |
-| Attention | self-attention pooling (word-level explainability) |
-| Loss | CrossEntropyLoss with inverse-frequency class weights |
-| Optimizer / LR | Adam / 1e-3 |
-| Epochs / Batch | 8 / 128, early stop patience 3 |
-| **Model file size** | **9.06 MB** (`bilstm_severity.pth`) |
-| Test macro-F1 / SEVERE recall | 0.4012 / 0.5915 |
-| Guard-rail floors fired | 2,251 / 6,759 |
-
 ### XGBoost Baseline (forecast)
 | Parameter | Value |
 | :--- | :---: |
@@ -252,7 +193,6 @@ A: A **Streamlit** web app combining everything:
 - **Risk classification** — user enters sensor values → LOW/MODERATE/SEVERE (with guard-rail safety).
 - **Flood vision** — user uploads a drone image → FLOODED/CLEAR.
 - **River forecast** — shows the 12h-ahead LSTM forecast.
-- **Message triage** — paste an SOS message → LOW / MODERATE / SEVERE / **REVIEW** (classical vs deep live comparison; purple REVIEW = human triage required).
 Results are colour-coded (red = critical, amber = warning, green = safe) for instant readability.
 
 **Q: Why does integration matter?**
@@ -278,13 +218,6 @@ A: It proves the models work **together** as a live system — instant credibili
 | Catastrophic underestimates | 157 (disclosed) |
 | LSTM verdict | CONDITIONAL PASS |
 | Vision verdict | PASS |
-| NLP test messages | 6,759 (train 27,032 / total 33,791) |
-| NLP class split | LOW 47.1% / MODERATE 42.4% / SEVERE 10.5% |
-| NLP shipped macro-F1 / SEVERE recall | 0.4242 / 0.3211 |
-| NLP deep macro-F1 / SEVERE recall | 0.4012 / 0.5915 |
-| NLP guard-rail floors fired | 2,251 / 6,759 |
-| NLP auto coverage @ 0.50 | 67.4% (SEVERE handled 0.85) |
-| NLP verdict | CONDITIONAL PASS |
 
 ---
 
@@ -345,7 +278,7 @@ A: It proves the models work **together** as a live system — instant credibili
 - **Depthwise separable convolution:** Splits filtering into a depthwise + pointwise step — far fewer parameters than standard conv.
 - **Transfer learning:** Start from a network pre-trained on ImageNet, fine-tune the last layers on our task. Saves time/data.
 - **Fine-tuning:** Continuing training of a pre-trained model on new data, maybe with a lower learning rate.
-- **Freezing weights:** Keeping the backbone's weights fixed (requires_grad=False) so only the head learns.
+- **0:** Keeping the backbone's weights fixed (requires_grad=False) so only the head learns.
 - **ImageNet:** A huge benchmark image dataset (1M+ images, 1000 classes) used to pre-train the backbone.
 - **Pretrained weights:** Weights already learned on ImageNet; our starting point.
 - **DataLoader / Batch:** Loading images in groups (batch size 32) for efficient training.
@@ -374,25 +307,6 @@ A: It proves the models work **together** as a live system — instant credibili
 - **Weight decay:** Adds a penalty to large weights to reduce overfitting (regularisation).
 - **Catastrophic underestimation:** Predicting far below the true dangerous level — exactly what causes evacuation failures. 157 flagged.
 - **Naive persistence baseline:** The "prediction" that the value stays the same; the minimum bar for a forecast to be useful.
-
-### NLP / Text
-- **NLP (Natural Language Processing):** Making computers understand/classify text. We triage emergency messages by severity.
-- **TF-IDF (Term Frequency–Inverse Document Frequency):** Converts words to numbers so rare-but-distinctive words (e.g. "trapped") weigh more than common words ("the").
-- **N-gram:** Groups of n consecutive words — we use 1–2, so both "help" and "please help" are captured.
-- **Bag-of-words:** Representing text by word frequencies, ignoring order.
-- **Tokenisation:** Splitting text into word tokens.
-- **Text cleaning / Normalisation:** Lowercasing, fixing spacing so "Flood!" and "flood" are the same token; kept light because crisis text is noisy.
-- **Vocabulary:** The set of tokens the model knows (~50K for NLP).
-- **Embedding:** A learned numeric vector per word capturing meaning ("flood" sits near "water" in vector space).
-- **Logistic Regression (text):** A linear classifier over TF-IDF features — fast, tiny, interpretable (you can see which words push toward SEVERE).
-- **BiLSTM (Bidirectional LSTM):** Two LSTMs reading a message left→right and right→left, so the model sees full context.
-- **Attention (self-attention pooling):** Learned weights over words — tells us WHICH words drove a decision (explainability).
-- **Class imbalance (NLP):** SEVERE is rare (10.5%); handled by balanced class weights, inverse-frequency loss weights, and guard-rail escalation.
-- **Derived labels / label engineering:** Labels derived from keywords/genres with disclosed rules rather than human-labelled per message — disclosed as a limitation.
-- **Abstention / Human-in-the-loop:** The model says "REVIEW" when unsure (confidence < threshold) instead of guessing; a human decides.
-- **Coverage:** % of messages the system answers vs sends to humans (67.4% at threshold 0.50).
-- **Baseline gating (NLP):** We ship whichever of two tracks has better held-out evidence; the deep model must clearly beat the simple one.
-- **Guard rail (text):** Deterministic keyword floors evaluated before the statistical model; can only escalate, never downgrade.
 
 ### Data
 - **Temporal / time-based split:** Splitting train/test by time (not randomly) so the model never sees the future.
@@ -452,7 +366,7 @@ A: We test on a held-out time period (after the train gap) the model never saw, 
 A: Accuracy is overall correctness. Recall (for flooded) is how many real floods we catch. A missed flood = danger, so **flooded recall (95.45%) is our headline safety metric**, not accuracy.
 
 **Q: How do you decide PASS vs FAIL?**
-A: Against pre-defined gating criteria — e.g., vision: flooded recall ≥ 85%; forecast: MAE < naive AND beats-naive > 50%; NLP: SEVERE handling ≥ 0.70 AND coverage ≥ 55% AND auto-macro-F1 ≥ 0.45. We enforce them consistently.
+A: Against pre-defined gating criteria — e.g., vision: flooded recall ≥ 85%; forecast: MAE < naive AND beats-naive > 50%. We enforce them consistently.
 
 **Q: What is a label artifact and why isn't it a model bug?**
 A: The test MODERATE rows all have river_level = 20.0m, which the decision rules call SEVERE. So the *labels* contradict the *rules* — the low MODERATE recall is the data's inconsistency, not the model failing to learn.
@@ -466,27 +380,6 @@ A: For vision, real edge-case imagery + more epochs/data augmentation. For the f
 **Q: Could you use the dashboard on a real drone/sensor?**
 A: Yes for the CNN (MobileNetV2 is edge-friendly), but the full pipeline currently runs on a laptop; edge deployment would need model conversion/quantisation.
 
-**Q: Why did you build two NLP tracks instead of one?**
-A: Evidence over assumptions. We let held-out macro-F1 decide rather than assuming deep learning is better — and the simple model won, so we ship interpretability.
-
-**Q: Why ship the Logistic Regression when the BiLSTM catches more real SEVERE messages?**
-A: The deep model wins SEVERE recall (0.59 vs 0.32) but hurts overall balance (macro-F1 0.40 vs 0.42). Baseline gating says the complex model must clearly win — it doesn't — and the keyword guard rail recovers the SEVERE gap in the shipped system.
-
-**Q: How is the NLP guard rail different from Stage 01's?**
-A: Same safety philosophy, different input. Stage 01 enforces numeric sensor thresholds; NLP enforces keyword floors on text. Both are deterministic and can only escalate severity, never downgrade.
-
-**Q: What happens when the model is unsure?**
-A: Abstention. Confidence below 0.50 → the message is marked REVIEW (purple "HUMAN TRIAGE REQUIRED") and a human operator decides. An honest "review" beats a wrong automated response in an emergency.
-
-**Q: How did you handle class imbalance in NLP?**
-A: `class_weight="balanced"` for the classical model, inverse-frequency loss weights for the BiLSTM, and the guard rail escalates keyword-heavy SEVERE cases so the rare class is never ignored.
-
-**Q: How do you prevent leakage in NLP?**
-A: The stratified split is made once; the shake test messages (6,759) are untouched — TF-IDF fits on train only and the BiLSTM never trains on test.
-
-**Q: What would you improve in NLP?**
-A: Human-labelled severity (instead of derived rules), domain-tuned embeddings, more SEVERE examples, and cost-sensitive training to close the SEVERE-recall gap.
-
 ---
 
 ## 11. One-Liners for Common Jargon Fumbles
@@ -497,9 +390,29 @@ A: Human-labelled severity (instead of derived rules), domain-tuned embeddings, 
 - "**Residual** = predict the step, not the whole staircase."
 - "**Pickle** = save the model so we can load it later."
 - "**Guard rail** = a hard safety rule the model can't break."
-- "**TF-IDF** = rare-but-distinctive words matter — 'trapped' beats 'the'."
-- "**N-grams** = catch 'please help' as well as 'help'."
-- "**Attention** = the model tells me which words it looked at."
-- "**Abstention** = says 'REVIEW' instead of guessing when unsure."
-- "**Text guard rail** = keyword floors that can only escalate, never downgrade."
+
+---
+
+## 12. SLM (Role 8) quick Q&A
+
+**Q: What is the SLM?**
+A: A self-built, 17 MB, 2-layer LSTM language model trained only on our 33,791 real messages. Its one skill is predicting the next word — that powers next-word drafting hints and a domain-fit (perplexity) gauge in the dashboard.
+
+**Q: Is it an LLM?**
+A: No. They share one trick (predict the next word), but an LLM is enormous, needs the internet/GPU, and is a black box. Ours is small, offline, CPU-only, and fully explainable — the right trade-off for field deployment.
+
+**Q: Aren't you generating fake data?**
+A: No, and this is our strongest rule. We train only on real messages; we refused a "paraphrase" feature because rewriting text *creates* synthetic content. The dashboard's suggestions are labelled "SLM guess", never treated as data.
+
+**Q: What is perplexity?**
+A: exp(average next-word surprise). Low = the message reads like the real disaster corpus (familiar); high = unusual wording, so we show "keep the human in the loop". It is a disclosed heuristic gauge, never a decision-maker.
+
+**Q: Why did Track C fail and why is that a win?**
+A: The SLM-as-classifier scored macro-F1 0.3523 vs the 0.4242 gate — it does not ship, and the report says so. Its SEVERE recall (0.6746) beats both shipped models, which is a great discussion point: one good number does not earn a production slot.
+
+**Q: Can the SLM change a verdict?**
+A: Never. Verdict comes from the guard rail + triage model; low confidence goes to REVIEW; the SLM sits below all of that as an assistant.
+
+**Q: How do you prove it works?**
+A: Reproducible pipeline (`stage_04_slm/dl_engineer/slm_train.py`), loss 7.62 → 5.72 vs random ~9.68, live Copilot panel verified headlessly by AppTest with zero exceptions, and an honest report file for Track C (`stage_04_slm/reports/slm_head_report.md`).
 

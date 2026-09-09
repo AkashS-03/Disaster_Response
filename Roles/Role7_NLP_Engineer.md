@@ -56,6 +56,20 @@ Given a free-text emergency report, produce a triage class. Classes: `["LOW", "M
    - Fired on **2,251 / 6,759** test messages.
 2. **Human-in-the-loop abstention** — if the model's top confidence is below **threshold 0.50**, it returns **REVIEW** and the message goes to a human operator instead of a guessed class. The dashboard renders this as a distinct purple "HUMAN TRIAGE REQUIRED" state.
 
+## Entity clarification — what else I pull from a message
+Triage class + confidence answers *"how urgent?"* — but a coordinator also needs *"what does this message actually describe?"*. So the NLP agent exposes a lightweight **entity extractor** (`extract_entities`, served to the dashboard as the **Detected Entities** panel):
+
+| Entity type | Examples pulled | How |
+| :--- | :--- | :--- |
+| **People counts** | `150 people`, `3 children`, `30 families`, `hundreds of villagers` | regex on *number ≈ unit / approximate-word ≈ unit* |
+| **Location** | `roof of the colony`, `Bandra station`, `eastern ward`, `slum near Dadar` | preposition-phrase regex (`in/at/near/on/…`) + road/ward/colony keyword + known Mumbai areas |
+| **Key details** | `rescue intervention needed`, `medical help reported`, `vulnerable group present`, `supplies / aid requested`, `evacuation / shelter needed`, `infrastructure affected`, `casualties reported` | seven keyword rules → human-readable chips |
+
+Design notes worth defending at the viva:
+- **No external NER dependency** (no spaCy/transformers on a CPU-only machine) — it's deterministic regex/keyword logic, so **every extraction is explainable and reproducible** (count it with your own hands). The cost: it misses unlisted phrasings that a learned NER would catch — an honest trade-off we disclose.
+- The extractor is **complementary to the model**, not part of it: the verdict never changes because of what entities were found. It's a "what + where + how many" layer on top of the "how urgent" verdict.
+- Empty result is a meaningful signal: the message gives no actionable population/location/detail, so the coordinator knows not to dispatch on guesswork.
+
 ## Results (independent evaluation, n=6,759)
 | Quantity | Value |
 | :--- | :---: |
@@ -77,3 +91,31 @@ Given a free-text emergency report, produce a triage class. Classes: `["LOW", "M
 4. **What is attention in your BiLSTM?** — A learned weighting over the words: it tells us which words drove the decision — an explainability handle.
 5. **How do you handle imbalance?** — `class_weight="balanced"` (classical) + inverse-frequency loss weights (deep) + over-sampling of SEVERE by the guard rail.
 6. **Why CONDITIONAL PASS?** — Raw model metrics miss the auto-accuracy/macro-F1 gates; guard rail + abstention make it safe enough to ship as a triage aid, disclosed honestly.
+7. **What is your entity extractor and why not real NER?** — `extract_entities` pulls people counts, locations, and key details from a message (rendered as chips in the dashboard) using deterministic regex/keyword rules. No spaCy/transformers means no heavy CPU dependency and every extraction is explainable and reproducible; we accept that unlisted phrasings are missed and disclose that limit.
+
+## SLM: Detailed Explanation & My Role Facts (Role 8 tie-in)
+
+### What the SLM is (NLP view)
+The SLM is a complementary **language model**: while my triage answers *"how urgent is this message?"*, the SLM answers *"what word plausibly comes next?"* and *"does this text read like the real disaster corpus?"*. Both are trained on the SAME real master dataset — neither one is treated as ground truth by the other.
+
+### Roles in the pipeline (who decides what)
+| Layer | Decides | Model |
+| :--- | :--- | :--- |
+| 1. Guard rail (keyword floors) | can only *escalate* severity | deterministic, no model |
+| 2. Triage model | LOW / MODERATE / SEVERE + confidence | shipped stat classifier (my Track A) |
+| 3. Abstention | confidence < 0.50 → **REVIEW** (human) | deterministic threshold |
+| 4. Entity extractor | "what / where / how many" chips | `extract_entities` (regex/keyword) |
+| 5. SLM Copilot (Tab 4) | next-word hints + domain-fit gauge | SLM (assistive, bottom layer) |
+
+The SLM is deliberately at the **bottom**: it can suggest, but it can never override lines 1–3. That ordering is the safety story and it is visibly true in the UI.
+
+### How the SLM relates (and does not relate) to my components
+- **Same data:** the SLM is trained on the same real master text. No synthetic text anywhere, matching my derived-label honesty.
+- **Different supervision:** my classifier uses severity *labels*; the SLM uses the message text as its own supervision (predict next word). So it learns *wording patterns*, not urgency.
+- **Track C was the crossover** — reusing the SLM as a severity classifier. It lost the gate (macro-F1 0.3523 vs 0.4242) and does NOT ship. The lesson for the NLP role: one model doing everything lost to specialised + gated tools.
+- **Perplexity vs confidence:** my triage confidence is a probability of the predicted class (safety-controlled by abstention). SLM perplexity is a "familiar wording" gauge (heuristic bands). Never confuse the two in the debate — one sits in a safety gate, the other does not.
+
+### Likely SLM questions for the NLP Engineer
+1. **"Two models, same data — is that wasteful?"** — They answer different questions (urgency vs wording), and the SLM is a 17 MB offline add-on; the cost is tiny and the drafting + domain-fit value is real for field coordinators.
+2. **"Why not give the SLM the severity labels and train it as a classifier with attention?"** — That is literally Track C; it was built, evaluated, and gated. Attention-classified BiLSTM (Track B) also lost macro-F1 to the interpretable model. We did the experiments rather than argue from taste.
+3. **"Could SLM suggestions accidentally introduce false keywords (e.g. 'trapped')?"** — The triage + guard rail run on the *typed message*, not on the suggestion strings; the Copilot outputs are shown as hints and are never fed back into inference. That is an integration guarantee, verifiable in code.

@@ -14,6 +14,7 @@ Flow for one message:
 """
 
 import os
+import re
 import sys
 import json
 
@@ -42,6 +43,108 @@ MODERATE_FLOOR = [
     "homeless", "shortage", "no electricity", "power cut", "power out",
     "road closed", "bridge", "aid", "supplies",
 ]
+
+# ---------------------------------------------------------------------------
+# Entity extraction (lightweight regex/keyword — no external NER dependency).
+# Surfaced in the dashboard as the "Detected Entities" panel: people counts,
+# location hints, and key detail flags.
+# ---------------------------------------------------------------------------
+
+_PEOPLE_UNITS = (r"people|persons|families|children|kids|women|men|elders?|seniors?|"
+                 r"villagers|residents|civilians|patients|students|victims|labourers?")
+_COUNT_NOUNS = r"trapped|stranded|injured|wounded|dead|missing|displaced|homeless|affected|stuck"
+
+_COUNT_RE = re.compile(
+    rf"\b(?P<num>\d{{1,4}}(?:[,.]\d{{3}})*)\s+(?P<unit>{_PEOPLE_UNITS}|{_COUNT_NOUNS})\b",
+    re.IGNORECASE)
+_APPROX_RE = re.compile(
+    rf"\b(?P<word>many|dozens? of|several|hundreds? of|thousands? of|couple of|scores of)\s+"
+    rf"(?P<unit>{_PEOPLE_UNITS}|{_COUNT_NOUNS})\b",
+    re.IGNORECASE)
+
+_LOC_NOUNS = (r"ward|zone|colony|slum|basti|chawl|nagar|lane|street|road|sector|block|society|"
+              r"building|tower|apartment|complex|market|station|hospital|camp|school|shelter|"
+              r"bridge|locality|area|housing")
+_LOC_PREP_RE = re.compile(
+    r"\b(?:in|at|near|around|outside|from|on|beside|behind|opposite|by)\s+"
+    r"(?P<p>[a-z0-9][a-z0-9 &'.,-]{1,60}?)(?=[,.;:)]|\b(?:and|with|but|while|as|because|where|"
+    r"please|need|are|is|was|were|cannot|can't|the rescue|the water|the flood|the army|the govt)\b|\s*$)",
+    re.IGNORECASE)
+_LOC_HAS_TOKEN = re.compile(rf"\b(?:{_LOC_NOUNS})\b", re.IGNORECASE)
+_BARE_LOC_RE = re.compile(
+    r"\b([a-z]+)\s+(ward|colony|nagar|street|road|sector|block|slum)\b", re.IGNORECASE)
+_LOC_STOP = {"the", "a", "an", "in", "at", "on", "near", "of", "with",
+             "and", "for", "to", "from", "this", "that"}
+_KNOWN_PLACES = [
+    "kurla", "sion", "bandra", "khar", "borivali", "dahisar", "dadar",
+    "andheri", "mumbai", "pune", "nagpur", "new delhi", "chennai", "kolkata",
+]
+
+_DETAIL_RULES = [
+    (r"\b(rescue|rescuers|trapped|stranded|stuck|save us|please help|help us|help immediately)\b",
+     "rescue intervention needed"),
+    (r"\b(injured|wounded|bleeding|unconscious|ambulance|doctor|medical|hospital)\b",
+     "medical help reported"),
+    (r"\b(children?|kids|baby|pregnant|elderly|elders?|seniors?|disabled|women)\b",
+     "vulnerable group present"),
+    (r"\b(food|water|medicine|medicines|clothes|blankets|supplies|aid|rations|drinking water)\b",
+     "supplies / aid requested"),
+    (r"\b(shelter|evacuat|homeless|displaced|camp|relief)\b", "evacuation / shelter needed"),
+    (r"\b(power cut|no electricity|no power|electricity|communication lost|network down|"
+     r"road closed|bridge closed)\b", "infrastructure affected"),
+    (r"\b(dead|deaths|died|corpse|bodies)\b", "casualties reported"),
+]
+
+
+def _extract_entities(text):
+    """Regex/keyword entity extraction shared by the wrapper and the dashboard."""
+    entities = {"people": [], "locations": [], "details": []}
+    low = str(text)
+
+    seen_people = []
+    for m in _COUNT_RE.finditer(low):
+        num, unit = m.group("num").replace(",", "").replace(".", ""), m.group("unit").lower()
+        if unit in seen_people:
+            continue
+        seen_people.append(unit)
+        entities["people"].append({"count": int(num), "unit": unit})
+    for m in _APPROX_RE.finditer(low):
+        word, unit = m.group("word").lower(), m.group("unit").lower()
+        if unit in seen_people:
+            continue
+        seen_people.append(unit)
+        entities["people"].append({"count": None, "unit": unit, "approximate": word})
+
+    locations = []
+    for m in _LOC_PREP_RE.finditer(low):
+        ph = " ".join(m.group("p").split())
+        ph = re.sub(r"^(?:the|a|an)\s+", "", ph)
+        toks = ph.split()
+        while toks and toks[-1].lower() in ("of", "in", "at", "near", "on", "the", "a", "an"):
+            toks.pop()
+        ph = " ".join(toks[:5])
+        if (ph and (_LOC_HAS_TOKEN.search(ph) or any(p in ph for p in _KNOWN_PLACES))
+                and ph.lower() not in locations):
+            locations.append(ph.lower())
+    for m in _BARE_LOC_RE.finditer(low):
+        adj, loc = m.group(1).lower(), m.group(2).lower()
+        if adj in _LOC_STOP:
+            continue
+        ph = f"{adj} {loc}"
+        if ph not in locations:
+            locations.append(ph)
+    for p in _KNOWN_PLACES:
+        if re.search(rf"\b{re.escape(p)}\b", low) and p not in locations:
+            locations.append(p)
+
+    details = []
+    for pattern, label in _DETAIL_RULES:
+        if re.search(pattern, low) and label not in details:
+            details.append(label)
+
+    entities["locations"] = locations[:4]
+    entities["details"] = details[:5]
+    return entities
 
 
 class NlpTriage:
@@ -86,6 +189,16 @@ class NlpTriage:
         with torch.no_grad():
             logits, _ = self.deep(x, (x != 0).float())
         return torch.softmax(logits, dim=1)[0].numpy()
+
+    def extract_entities(self, text):
+        """Structured facts pulled from a message for the "Detected Entities" panel.
+
+        Returns a dict: {"people": [{count, unit} ...], "locations": [...],
+        "details": [...]} — populated by regex/keyword matching, not a learned NER.
+        """
+        extra = _extract_entities(text)
+        extra["source"] = "regex/keyword extractor (deterministic, explainable)"
+        return extra
 
     def triage(self, text, use_deep=False):
         """Returns final decision dict for one message.
@@ -157,4 +270,6 @@ if __name__ == "__main__":
         "the building collapsed and a child is injured, rescue needed now",
     ]
     for s in samples:
-        print(demo.triage(s))
+        r = demo.triage(s)
+        print(f"[{r['prediction']:8s}] conf={r['confidence']:.2f} | {s}")
+        print(f"    entities: {demo.extract_entities(s)}")

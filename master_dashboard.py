@@ -18,10 +18,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STAGE_01_DIR = os.path.join(BASE_DIR, "stage_01_ml")
 STAGE_02_DIR = os.path.join(BASE_DIR, "stage_02_dl")
 STAGE_03_DIR = os.path.join(BASE_DIR, "stage_03_nlp")
+STAGE_04_DIR = os.path.join(BASE_DIR, "stage_04_slm")
 if STAGE_01_DIR not in sys.path:
     sys.path.insert(0, STAGE_01_DIR)
 if STAGE_03_DIR not in sys.path:
     sys.path.insert(0, STAGE_03_DIR)
+if STAGE_04_DIR not in sys.path:
+    sys.path.insert(0, STAGE_04_DIR)
 import safety_guard  # noqa: F401 – enables joblib to unpickle GuardRailedPredictor
 
 # =============================================================================
@@ -224,6 +227,35 @@ st.markdown("""
     .tile .v { font-family:'Sora',sans-serif; font-weight:800; font-size:1.6rem; margin-top:4px; }
     .tile .h { font-size:0.8rem; color:#64748b; margin-top:2px; }
 
+    /* ENTITY EXTRACTION PANEL */
+    .entity-panel {
+        background: rgba(16,25,48,0.6);
+        border: 1px solid rgba(90,140,255,0.25);
+        border-radius: 14px;
+        padding: 0.9rem 1.1rem 1.0rem;
+        margin-top: 12px;
+    }
+    .entity-panel .ep-title {
+        font-size:0.72rem; letter-spacing:2px; text-transform:uppercase;
+        color:#94a3b8; font-weight:600; margin-bottom:6px;
+    }
+    .entity-panel .ep-row { margin-top:6px; }
+    .entity-panel .ep-row .ep-label {
+        display:inline-block; min-width:70px;
+        font-size:0.75rem; color:#7dd3fc; font-weight:600; vertical-align:top;
+    }
+    .chip {
+        display:inline-block;
+        border-radius:999px;
+        padding:2px 11px;
+        margin:2px 5px 2px 0;
+        font-size:0.80rem; font-weight:600;
+    }
+    .chip-p  { background:rgba(245,158,11,0.14); color:#fde68a; border:1px solid rgba(245,158,11,0.4); }
+    .chip-l  { background:rgba(34,197,94,0.14);  color:#86efac; border:1px solid rgba(34,197,94,0.4); }
+    .chip-d  { background:rgba(139,92,246,0.14); color:#d8b4fe; border:1px solid rgba(139,92,246,0.4); }
+    .entity-panel .ep-empty { font-size:0.82rem; color:#64748b; }
+
     /* DIRECTIVES */
     .directive {
         border-radius:14px; padding:1.0rem 1.2rem; font-size:0.92rem;
@@ -403,6 +435,16 @@ def load_all_models():
     else:
         models_dict['nlp'] = None
 
+    # 5. SLM Copilot (Stage 4 - small language model, assistive only)
+    try:
+        from integration_engineer.slm_integration import SlmAssistant
+        models_dict['slm'] = SlmAssistant(
+            os.path.join(STAGE_04_DIR, "models")) if SlmAssistant.available(
+                os.path.join(STAGE_04_DIR, "models")) else None
+    except Exception as e:
+        models_dict['slm'] = None
+        print(f"Error loading SLM assistant: {e}")
+
     return models_dict
 
 MODELS = load_all_models()
@@ -444,7 +486,7 @@ st.markdown(f"""
 </div>
 
 <div class="hero">
-    <div class="kicker">Stage 01 ML · Stage 02 Deep Learning · Stage 03 NLP Unified Platform</div>
+    <div class="kicker">Stage 01 ML · Stage 02 Deep Learning · Stage 03 NLP · Stage 04 SLM Unified Platform</div>
     <h1><span class="grad">Disaster Response Operations</span></h1>
     <div class="subtitle">Predict flood risk tiers, detect aerial inundation, triage emergency text reports, and forecast hydrological river dynamics with zero congestion.</div>
 </div>
@@ -986,6 +1028,38 @@ with tab_nlp:
         if nlp_reason:
             st.caption(f"Decision basis: {nlp_reason}")
 
+        nlp_ent_html = ""
+        if MODELS['nlp'] is not None and nlp_msg.strip():
+            try:
+                ent = MODELS['nlp'].extract_entities(nlp_msg)
+                people_ok = bool(ent.get("people"))
+                loc_ok = bool(ent.get("locations"))
+                det_ok = bool(ent.get("details"))
+                if people_ok or loc_ok or det_ok:
+                    def _cap(t):
+                        return t[:1].upper() + t[1:]
+                    rows = []
+                    for elabel, key, cls in (("People", "people", "chip-p"),
+                                             ("Location", "locations", "chip-l"),
+                                             ("Details", "details", "chip-d")):
+                        for it in (ent.get(key) or []):
+                            if key == "people" and it.get("count") is not None:
+                                chip = _cap(f"{it['count']:,} {it['unit']}")
+                            elif key == "people":
+                                chip = _cap(f"{it.get('approximate', '~')} {it['unit']}")
+                            else:
+                                chip = _cap(str(it))
+                            rows.append(f'<span class="chip {cls}">{chip}</span>')
+                    if rows:
+                        nlp_ent_html = (
+                            '<div class="entity-panel"><div class="ep-title">'
+                            f'Detected Entities · {ent.get("source", "regex/keyword")}</div>'
+                            f'<div class="ep-row">{"".join(rows)}</div></div>')
+            except Exception:
+                nlp_ent_html = ""
+        if nlp_ent_html:
+            st.markdown(nlp_ent_html, unsafe_allow_html=True)
+
         if n_dir:
             st.markdown(f"""
             <div class="directive {n_dir}">
@@ -996,6 +1070,53 @@ with tab_nlp:
             """, unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # ---- SLM Copilot panel (full-width, assistive only) ---------------------
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown('<div class="panel-title"><span class="badge">SLM COPILOT</span> Small Language Model: assistive drafting hints (SLM guesses, never data)</div>', unsafe_allow_html=True)
+    if MODELS.get('slm') is None:
+        st.info("SLM Copilot is not trained yet. Run  `stage_04_slm/dl_engineer/slm_train.py`  once "
+                "(plain CPU, no extra packages) and it appears here automatically.")
+    elif not nlp_msg.strip():
+        st.caption("Type or paste an SOS message above to get a cleaned draft, SLM next-word guesses and a "
+                   "domain-fit (perplexity) gauge.")
+    else:
+        try:
+            slm = MODELS['slm']
+            c_slm1, c_slm2 = st.columns([1, 1], gap="large")
+            with c_slm1:
+                st.markdown("**📝 Cleaned draft** *(deterministic hygiene — no generated content)*")
+                st.code(slm.refine(nlp_msg) or "—", language=None)
+            with c_slm2:
+                st.markdown("**🤖 SLM next-word guesses** *(labelled SLM guess · common filler words hidden)*")
+                sugg = slm.complete(nlp_msg, k=5)
+                if sugg:
+                    chips = "".join(
+                        f'<span class="chip chip-l" style="margin-right:6px;">{w} · {p:.0f}%</span>'
+                        for w, p in sugg)
+                    st.markdown(f'<div class="entity-panel"><div class="ep-row">{chips}</div></div>',
+                                unsafe_allow_html=True)
+                    st.caption("These are SLM guesses for the most probable next word (common filler "
+                               "words like 'the'/ 'and' are hidden so the hints stay useful). They are "
+                               "drafting hints only, NOT extracted facts or generated data.")
+                else:
+                    st.caption("No suggestions for this message.")
+            ppl = slm.perplexity(nlp_msg)
+            if ppl < 300:
+                fit = "very typical of disaster messages (low)"
+            elif ppl < 900:
+                fit = "typical for a disaster message"
+            else:
+                fit = "unusual wording — keep the human in the loop (high)"
+            st.markdown(
+                f'<div style="font-size:0.85rem; color:#a5b4fc; margin-top:4px;">🧮 <b>DomainFit '
+                f'(perplexity):</b> {ppl:.0f} → {fit}. The SLM learned the real disaster corpus, so low '
+                f'perplexity = familiar wording; high = out-of-domain, so the message stays with a human. '
+                f'Gauge only — it never overrides the triage verdict above.</div>',
+                unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"SLM Copilot error: {e}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================================================================
 # TAB 5: UNIFIED INCIDENT COMMAND CENTER (MULTI-MODAL OVERVIEW)

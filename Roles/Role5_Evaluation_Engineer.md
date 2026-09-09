@@ -48,3 +48,42 @@ Originally the scorecard hardcoded fabricated numbers and PASS verdicts. I fixed
 3. **Why CONDITIONAL PASS for the forecast?** — Beats naive on MAE/fraction but 157 catastrophic underestimates + missing 3h/6h horizons.
 4. **Why correct fabricated edge cases?** — Fabrication would be caught in a live demo; real, defensible numbers win the debate.
 5. **What is baseline gating?** — A model is only useful if it beats the trivial baseline (e.g., "predict it stays the same"); we test that explicitly.
+
+## SLM: Detailed Explanation & My Role Facts (Role 8 tie-in)
+
+### What the SLM is (evaluation view)
+The SLM is a language model (next-word prediction) with **two uses and two verdicts**:
+1. **As a language model — PASS as an assistive tool.** Trained on real data; loss 7.62 → 5.72 vs random ≈9.68; powers drafting hints and a domain-fit gauge. It never makes decisions, so it is judged on plausibility, not safety gates.
+2. **As a classifier (Track C) — FAIL, does NOT ship.** This is the part I evaluate the hardest and report un-massaged.
+
+### Track C evaluation methodology (how fairness is guaranteed)
+- **Data:** the exact same real split as the shipped triage — train 27,032 for the head, and the **untouched test split (6,759)** for grading. Nothing about Track C's training sees the test set.
+- **Standardisation honesty:** features are scaled using **train-only** mean/std, then applied to the test set. This is the textbook-correct way (fit on train, transform test) and is stated in the report.
+- **Class weighting:** weights are computed *per class on the training split* (`len(y)/count(class)`, normalised) so the rare SEVERE class is not starved of gradient — a standard imbalance treatment, not a re-labelling cheat.
+- **Baseline gating:** ships only if it **clearly beats** 0.4242 macro-F1 on the same test set.
+
+### The numbers table to quote (from `stage_04_slm/reports/slm_head_report.md`)
+| Metric | SLM Track C | Stat (shipped) | Deep (BiLSTM) |
+| :--- | :---: | :---: | :---: |
+| Macro-F1 | 0.3523 | **0.4242** | 0.4012 |
+| SEVERE recall | 0.6746 | 0.3211 | 0.5915 |
+
+An independent re-audit (`stage_04_slm/evaluation_engineer/eval_slm.py` →
+`stage_04_slm/reports/slm_evaluation_report.md`) recomputes every number from
+the shipped weights — nothing copied from the training log, and the head is
+scored in deterministic eval mode (dropout off), matching production.
+| Verdict | **NOT shipped** (below gate) | shipped | not shipped |
+
+### Why I publish the SEVERE-recall nuance instead of hiding it
+The most defensible position in a debate is the one that already told the truth. Track C catches more real SEVERE messages than the shipped models (0.6746 vs 0.3211 / 0.5915) — a reviewer WILL notice. I say it myself, first, and explain why it still loses the gate: macro-F1 measures *overall* triage balance; shipping a model that only excels at one class would hurt the coordination loop on every other message. Same reasoning as Track B vs Track A. **Honesty is the weapon: nothing we say can be fact-checked against our own report file and found wrong.**
+
+### Perplexity: a gauge, not a metric under the gate
+Perplexity is *exp(average surprise)* — reported in the Copilot panel as bandwidths <300 / 300–900 / >900 (recalibrated on the real test-message distribution). It is explicitly **not part of any safety gate**: it is a disclosed heuristic for "does this read like a real disaster message". Safety stays with the guard rail and human REVIEW. I state this so nobody can quote our own gauge as a safety claim.
+
+### Disclosed limitations (say them first)
+Weak 12-epoch LM · high absolute perplexity (~200–1000) · English-only tokeniser · Track C failed · perplexity bands are heuristics.
+
+### Likely SLM questions for the Evaluation Engineer
+1. **"Your Track C report admits failure — why keep the model?"** — Because "does the model ship as a classifier?" and "is the LM useful as an assistant?" are different questions. We answer them separately and honestly.
+2. **"Is SEVERE recall 0.6746 hiding something?"** — No; both numbers are in the report. One-class strength does not clear a balanced gate, and hiding the nuance would be caught instantly in a live demo.
+3. **"How do we know the test set is untouched by the SLM?"** — The SLM's language training used the full master corpus including test messages *for next-word learning*; Track C's *classifier head* was then trained only on the train split and evaluated only on the untouched test split. We disclose this distinction precisely because it matters: the LM is assistive; the head is what would have shipped — and it lost.
