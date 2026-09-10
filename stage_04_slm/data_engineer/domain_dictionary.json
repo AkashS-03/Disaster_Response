@@ -1,0 +1,34 @@
+{
+  "radio_shorthand": {
+    "PRI-1": "Priority 1 - Immediate life hazard",
+    "PRI-2": "Priority 2 - Urgent rescue/medical need",
+    "PRI-3": "Priority 3 - Routine resource support",
+    "SITREP": "Situation Report",
+    "10-4": "Message acknowledged and understood",
+    "ROGER": "Direct order understood",
+    "OVER-OUT": "Transmission concluding",
+    "ALL-CLEAR": "Threat neutralized or area secured",
+    "COMMS-DN": "Communication infrastructure disabled",
+    "MAYDAY": "Imminent life-safety distress"
+  },
+  "evacuation_and_rescue": {
+    "MEDEVAC": "Emergency medical air/ground evacuation",
+    "CAS-EVAC": "Casualty evacuation underway",
+    "LZ-CLEAR": "Helicopter landing zone confirmed safe",
+    "LZ-HOT": "Landing zone compromised or unsafe",
+    "SAR": "Search and Rescue team deployed",
+    "MCI": "Mass Casualty Incident declared",
+    "EVAC-ORDER": "Mandatory civilian evacuation order",
+    "SHELTER-NOW": "Immediate vertical shelter directive"
+  },
+  "hazard_and_logistics": {
+    "HAZMAT": "Hazardous chemical or toxic material danger",
+    "CODE-RED": "Active high-threat disaster zone",
+    "CODE-AMBER": "Heightened monitoring / secondary threat",
+    "WATER-PT": "Emergency potable water distribution site",
+    "RATION-DEP": "Food and survival supply depot",
+    "FLOOD-SURGE": "Rapidly advancing flash flood waters",
+    "STRUCT-FAIL": "Imminent bridge or structural collapse",
+    "SART": "Search and Rescue Transponder signal detected"
+  }
+}

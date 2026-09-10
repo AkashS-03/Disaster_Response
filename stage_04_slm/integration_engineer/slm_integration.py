@@ -1,141 +1,179 @@
 """
-Stage 04 - SLM | Integration Engineer: Copilot wrapper
-=======================================================
-Exposes the trained Small Language Model (SLM) to the dashboard as an
-ASSISTIVE tool. The SLM only makes suggestions - it never overrides the
-shipped classifier and never invents data.
-
-Everything is real-data-only:
-  - `perplexity(text)`  faithfulness/domain-fit gauge (real-probability)
-  - `complete(text)`     next-word suggestions, clearly labelled "SLM guess"
-  - `refine(text)`       deterministic text hygiene, NO generated content
+Stage 04 - SLM | Integration Engineer: Tactical Briefing Assistant Wrapper
+==========================================================================
+Exposes the fine-tuned TacticalBriefingSLM to the incident commander dashboard.
+Provides:
+  - generate_briefing(incident_log): 2-sentence tactical summary with latency tracking
+  - extract_tactical_chips(text): identifies tactical codes for UI HUD badges
+  - compute_time_savings(log_text, briefing_text): Team Huddle reading time calculator
+  - Curated crisis incident presets for live edge demonstration
 """
 
 import os
 import sys
-
+import time
 import torch
-import torch.nn.functional as F
 
 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from data_engineer.slm_utils import SOS, EOS, PAD, SPECIAL, UNK, MAX_SEQ, load_meta, tokenize  # noqa: E402
-from dl_engineer.slm_model import SlmLm  # noqa: E402
+from data_engineer.slm_utils import (  # noqa: E402
+    load_meta, text_to_ids, ids_to_text, pad_sequence, tokenize,
+    get_domain_tokens, load_domain_dictionary, format_two_sentences,
+    MAX_SRC_LEN, MAX_TGT_LEN
+)
+from dl_engineer.slm_model import build_model  # noqa: E402
 
 MODELS_DIR = os.path.join(base_dir, "models")
-SOS_ID = SPECIAL[SOS]
-EOS_ID = SPECIAL[EOS]
-PAD_ID = SPECIAL[PAD]
-UNK_ID = SPECIAL[UNK]
 
-# Pure function words / URL remnants add no drafting value as hints. We still
-# use the model's REAL probabilities - we only choose which words to SHOW.
-_COMMON_WORDS = frozenset("""
-the and to of in a for is on that with at by from as we i you it be are was were
-have has had this there so but or an not all if can will more some what when one
-two our their my your do no he she her him his its up out about than then after
-over while during into which who whom whose t co http com www also very just
-been being get go got like would could should may might still such only other
-many much most any each few both these those them they us me don't it's i'm we're
-""".split())
+# Field Presets for Instant Incident Commander Demo (Dense Multi-Report Logs ~140-160 words)
+DEMO_PRESETS = {
+    "🌊 Flash Flood Isolation (Sector 3 Delta)": (
+        "=== INCIDENT LOG DISPATCH | Sector 3 Delta | GRID: GR-482/DELTA ===\n"
+        "[T+025m / Field-Unit-01 / SEV:SEVERE]: Rapid flood waters rising over 2 meters near Delta Bridge; 18 civilians stranded on church rooftop.\n"
+        "[T+030m / Field-Unit-02 / SEV:SEVERE]: Current is too swift for conventional rubber dinghies; water entering residential floor levels rapidly.\n"
+        "[T+035m / Field-Unit-03 / SEV:MODERATE]: Local highway access cut off; primary roadway completely inundated with flash debris and downed power lines.\n"
+        "[T+040m / Field-Unit-04 / SEV:SEVERE]: Urgent medical evacuation needed for elderly casualties suffering hypothermia, shock, and dehydration.\n"
+        "[T+045m / Field-Unit-05 / SEV:MODERATE]: Potable drinking water supply contaminated by river silt; sanitation supplies exhausted across ward.\n"
+        "[T+050m / Field-Unit-06 / SEV:SEVERE]: Flash flood surge continuing downstream toward school shelter; immediate aerial extraction requested."
+    ),
+    "🏚️ Post-Quake Structural Collapse (Sector 1 North)": (
+        "=== INCIDENT LOG DISPATCH | Sector 1 North | GRID: GR-719/ALPHA ===\n"
+        "[T+045m / Field-Unit-01 / SEV:SEVERE]: 3-story concrete residential structure collapsed; rhythmic sounds of tapping heard from ground basement level.\n"
+        "[T+050m / Field-Unit-02 / SEV:SEVERE]: Estimated 12 victims trapped under secondary rubble beams; building structural integrity severely compromised.\n"
+        "[T+055m / Field-Unit-03 / SEV:MODERATE]: High-pressure natural gas leak detected in adjoining alleyway; heavy smell of methane and airborne dust.\n"
+        "[T+060m / Field-Unit-04 / SEV:SEVERE]: Specialized heavy lifting cranes, pneumatic shoring struts, and acoustic search teams required on site immediately.\n"
+        "[T+065m / Field-Unit-05 / SEV:SEVERE]: Secondary aftershocks measuring magnitude 4.8 triggered minor wall collapses on eastern perimeter.\n"
+        "[T+070m / Field-Unit-06 / SEV:MODERATE]: Local clinic damaged; temporary triage staging post requested on open soccer field north of sector."
+    ),
+    "☣️ Chemical Hazmat Ingress (Coastal Ward)": (
+        "=== INCIDENT LOG DISPATCH | Coastal Ward | GRID: GR-933/CHARLIE ===\n"
+        "[T+010m / Field-Unit-01 / SEV:SEVERE]: Industrial chemical storage tank ruptured following storm surge; yellow-green vapor cloud drifting southeast.\n"
+        "[T+015m / Field-Unit-02 / SEV:SEVERE]: Multiple residents reporting acute respiratory distress, severe ocular burning, nausea, and disorientation.\n"
+        "[T+020m / Field-Unit-03 / SEV:MODERATE]: Wind speed 15 knots blowing directly toward coastal civilian evacuation shelter housing 400 evacuees.\n"
+        "[T+025m / Field-Unit-04 / SEV:SEVERE]: Immediate 2-kilometer perimeter cordon required; deploy hazmat decontamination units and vertical shelter directives.\n"
+        "[T+030m / Field-Unit-05 / SEV:MODERATE]: Local access avenue blocked by stalled transport vehicles; traffic control units dispatched.\n"
+        "[T+035m / Field-Unit-06 / SEV:SEVERE]: Toxic vapor concentration rising near drainage canal; mandatory respirator directive issued for all personnel."
+    )
+}
 
 
-class SlmAssistant:
-    """Lazy-loaded SLM wrapper used by the dashboard (Copilot panel)."""
+class TacticalBriefingAssistant:
+    """Lazy-loaded Tactical Briefing SLM engine for edge command deployment."""
 
     def __init__(self, models_dir=MODELS_DIR):
         self.models_dir = models_dir
         self.model = None
-        self.vocab = None
-        self._inv = None
+        self.meta = None
+        self.src_vocab = None
+        self.tgt_vocab = None
+        self.inv_tgt = None
+        self.domain_tokens = set(get_domain_tokens())
+        self.domain_dict = load_domain_dictionary()
 
     def _load(self):
         if self.model is not None:
             return
-        meta = load_meta(os.path.join(self.models_dir, "slm_lm_meta.json"))
-        self.vocab = meta["vocab"]
-        cfg = meta["config"]
-        self.model = SlmLm(vocab_size=len(self.vocab), emb=cfg["emb"],
-                           hidden=cfg["hidden"], layers=cfg["layers"], dropout=0.0)
-        self.model.load_state_dict(torch.load(
-            os.path.join(self.models_dir, "slm_lstm.pth"), map_location="cpu"))
+        meta_path = os.path.join(self.models_dir, "slm_briefing_meta.json")
+        weights_path = os.path.join(self.models_dir, "slm_briefing.pth")
+        
+        if not (os.path.exists(meta_path) and os.path.exists(weights_path)):
+            raise FileNotFoundError("Tactical Briefing SLM weights not found. Run slm_train.py first.")
+            
+        self.meta = load_meta(meta_path)
+        self.src_vocab = self.meta["src_vocab"]
+        self.tgt_vocab = self.meta["tgt_vocab"]
+        self.inv_tgt = {v: k for k, v in self.tgt_vocab.items()}
+        
+        self.model = build_model(self.meta, weights_path)
         self.model.eval()
-        self._inv = {v: k for k, v in self.vocab.items()}
 
     @staticmethod
     def available(models_dir=MODELS_DIR):
-        return (os.path.exists(os.path.join(models_dir, "slm_lstm.pth"))
-                and os.path.exists(os.path.join(models_dir, "slm_lm_meta.json")))
+        return (os.path.exists(os.path.join(models_dir, "slm_briefing.pth"))
+                and os.path.exists(os.path.join(models_dir, "slm_briefing_meta.json")))
 
-    def _ids(self, text, with_eos=False, max_seq=MAX_SEQ):
-        ids = [self.vocab.get(w, UNK_ID) for w in tokenize(text)]
-        if with_eos:
-            ids = ids + [EOS_ID]
-        return ids[:max_seq]
-
-    def perplexity(self, text):
-        """Domain-fit gauge: exp(avg neg-log-prob of REAL next words)."""
+    def generate_briefing(self, incident_log):
+        """Generates a 2-sentence tactical briefing from a dense incident log in <100ms."""
         self._load()
-        ids = [SOS_ID] + self._ids(text, with_eos=True, max_seq=MAX_SEQ - 1)
-        x = torch.tensor([ids], dtype=torch.long)
-        t = torch.tensor([ids[1:] + [PAD_ID]], dtype=torch.long)
-        with torch.no_grad():
-            logits, _ = self.model(x)
-        logp = F.log_softmax(logits, dim=-1)
-        nll = []
-        for i in range(t.size(1)):
-            target = t[0, i].item()
-            if target in (PAD_ID,):
-                continue
-            nll.append(-logp[0, i, target].item())
-        if not nll:
-            return float("inf")
-        return float(torch.exp(torch.tensor(sum(nll) / len(nll))))
+        
+        t0 = time.perf_counter()
+        src_ids = text_to_ids(incident_log, self.src_vocab, max_len=MAX_SRC_LEN, add_sos=True, add_eos=True)
+        src_tensor = torch.tensor([pad_sequence(src_ids, MAX_SRC_LEN)], dtype=torch.long)
+        
+        gen_ids = self.model.generate(
+            src_tensor, max_len=MAX_TGT_LEN,
+            src_vocab=self.src_vocab, tgt_vocab=self.tgt_vocab
+        )
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        
+        raw_text = ids_to_text(gen_ids, self.inv_tgt)
+        formatted = format_two_sentences(raw_text)
+            
+        chips = self.extract_tactical_chips(formatted)
+        time_stats = self.compute_time_savings(incident_log, formatted)
+        
+        return {
+            "briefing": formatted,
+            "latency_ms": round(latency_ms, 1),
+            "tactical_chips": chips,
+            "time_stats": time_stats
+        }
 
-    def complete(self, text, k=5):
-        """Most likely NEXT word(s), common filler words hidden.
+    def extract_tactical_chips(self, text):
+        """Identifies recognized domain dictionary codes to display as tactical badges."""
+        toks = tokenize(text)
+        found = []
+        for t in toks:
+            if t in self.domain_tokens and t not in [f[0] for f in found]:
+                desc = "Tactical Code"
+                for cat, codes in self.domain_dict.items():
+                    if t in codes:
+                        desc = codes[t]
+                        break
+                found.append((t, desc))
+        return found
 
-        Always read as an SLM guess, not data. The probabilities are the
-        model's real softmax outputs - we merely hide pure function words so
-        the hints are actually useful (\"the / and / to\" are never helpful).
-        """
-        self._load()
-        ids = [SOS_ID] + self._ids(text, with_eos=False, max_seq=MAX_SEQ - 1)
-        x = torch.tensor([ids], dtype=torch.long)
-        with torch.no_grad():
-            logits, _ = self.model(x)
-        logits = logits[0, -1, :]
-        for spec in (SOS_ID, EOS_ID, PAD_ID, UNK_ID):
-            logits[spec] = -1e9
-        probs = F.softmax(logits, dim=-1)
-        ordered = torch.argsort(probs, descending=True)
-        picks = [i.item() for i in ordered if self._inv[i.item()] not in _COMMON_WORDS]
-        picks = picks[:k] or [ordered[0].item()]
-        return [(self._inv[i], round(probs[i].item() * 100, 1))
-                for i in picks if i in self._inv]
-
-    def refine(self, text):
-        """Deterministic hygiene only - never generates or rewrites content."""
-        cleaned = " ".join(str(text).split())
-        if cleaned and cleaned[-1] not in ".!?":
-            cleaned += "."
-        return cleaned
+    def compute_time_savings(self, log_text, briefing_text):
+        """Calculates exact reading duration and percentage reduction (Team Huddle metric)."""
+        wpm = 140.0  # Technical reading speed in words per minute
+        log_words = len(log_text.split())
+        briefing_words = len(briefing_text.split())
+        
+        log_read_sec = log_words / (wpm / 60.0)
+        briefing_sec = briefing_words / (wpm / 60.0)
+        
+        reduction = (1.0 - (briefing_words / max(log_words, 1))) * 100.0
+        
+        return {
+            "log_words": log_words,
+            "briefing_words": briefing_words,
+            "log_seconds": round(log_read_sec, 1),
+            "briefing_seconds": round(briefing_sec, 1),
+            "reduction_pct": round(reduction, 1),
+            "passed_80pct_gate": reduction >= 80.0
+        }
 
 
-def load_slm_assistant(models_dir=MODELS_DIR):
-    return SlmAssistant(models_dir=models_dir)
+# Backward-compatible aliases
+SlmAssistant = TacticalBriefingAssistant
+load_slm_assistant = TacticalBriefingAssistant
+
+
+def load_briefing_assistant(models_dir=MODELS_DIR):
+    return TacticalBriefingAssistant(models_dir=models_dir)
 
 
 if __name__ == "__main__":
-    if not SlmAssistant.available():
-        print("SLM weights not found - run slm_train.py first.")
+    if not TacticalBriefingAssistant.available():
+        print("SLM briefing weights not found. Run slm_train.py first.")
         sys.exit(1)
-    a = SlmAssistant()
-    sample = "need food and water after the flood in our village"
-    print("perplexity:", round(a.perplexity(sample), 2))
-    print("complete:", a.complete(sample, k=5))
-    messy = "  need   water   immediately   "
-    print("refine:", repr(a.refine(messy)))
-    print("refine(empty):", repr(a.refine("")))
+        
+    asst = load_briefing_assistant()
+    sample = DEMO_PRESETS["🌊 Flash Flood Isolation (Sector 3 Delta)"]
+    res = asst.generate_briefing(sample)
+    print("Briefing:", res["briefing"])
+    print("Latency :", res["latency_ms"], "ms")
+    print("Chips   :", res["tactical_chips"])
+    print("Savings :", res["time_stats"])
