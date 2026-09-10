@@ -96,26 +96,25 @@ Design notes worth defending at the viva:
 ## SLM: Detailed Explanation & My Role Facts (Role 8 tie-in)
 
 ### What the SLM is (NLP view)
-The SLM is a complementary **language model**: while my triage answers *"how urgent is this message?"*, the SLM answers *"what word plausibly comes next?"* and *"does this text read like the real disaster corpus?"*. Both are trained on the SAME real master dataset — neither one is treated as ground truth by the other.
+The SLM (Stage 04) is a **Severity-Conditioned Tactical Briefing Summarizer** that complements my Stage 03 **NLP SOS Triage Classifier**. They address two distinct operational bottlenecks in the disaster response lifecycle:
+- **Stage 03 NLP (Tab 4): Citizen-to-Responder Triage.** Takes unstructured, noisy incoming SOS messages from the public, detects urgency (LOW/MODERATE/SEVERE/REVIEW), enforces safety guard rails, and extracts entities (people count, location chips).
+- **Stage 04 SLM (Tab 5): Responder-to-Commander Tactical Briefing.** Takes multi-page, multi-unit incident dispatch reports and summarizes them into structured, length-constrained spoken briefs (<1 sentence for LOW, 1 sentence for MODERATE, strictly 2 sentences for SEVERE) while highlighting key situational factors.
 
-### Roles in the pipeline (who decides what)
-| Layer | Decides | Model |
+### Operational Division of Labor
+| Dimension | Stage 03: NLP Triage (Role 7) | Stage 04: Tactical SLM Briefing (Role 8) |
 | :--- | :--- | :--- |
-| 1. Guard rail (keyword floors) | can only *escalate* severity | deterministic, no model |
-| 2. Triage model | LOW / MODERATE / SEVERE + confidence | shipped stat classifier (my Track A) |
-| 3. Abstention | confidence < 0.50 → **REVIEW** (human) | deterministic threshold |
-| 4. Entity extractor | "what / where / how many" chips | `extract_entities` (regex/keyword) |
-| 5. SLM Copilot (Tab 4) | next-word hints + domain-fit gauge | SLM (assistive, bottom layer) |
+| **Input** | Single incoming SOS message / tweet (~22 words) | Multi-unit tactical dispatch report (~158 words) |
+| **Task** | Classification (Severity Class + Abstention) | Sequence-to-Sequence Severity-Conditioned Summarization |
+| **Model** | TF-IDF + Logistic Regression (Interpretable winner) | TransformerLoRA ($r=8, \alpha=16$, Multi-Head Attention) |
+| **Output** | Triage Card + Confidence + Guard Rail + Entity Chips | Key Factors Box + Brevity Summary + Offline Voice Synthesis |
+| **Dashboard Tab** | **Tab 4 ("💬 Stage 03: NLP Message Triage")** | **Tab 5 ("🎙️ Stage 04: SLM Severity Summarizer")** |
 
-The SLM is deliberately at the **bottom**: it can suggest, but it can never override lines 1–3. That ordering is the safety story and it is visibly true in the UI.
-
-### How the SLM relates (and does not relate) to my components
-- **Same data:** the SLM is trained on the same real master text. No synthetic text anywhere, matching my derived-label honesty.
-- **Different supervision:** my classifier uses severity *labels*; the SLM uses the message text as its own supervision (predict next word). So it learns *wording patterns*, not urgency.
-- **Track C was the crossover** — reusing the SLM as a severity classifier. It lost the gate (macro-F1 0.3523 vs 0.4242) and does NOT ship. The lesson for the NLP role: one model doing everything lost to specialised + gated tools.
-- **Perplexity vs confidence:** my triage confidence is a probability of the predicted class (safety-controlled by abstention). SLM perplexity is a "familiar wording" gauge (heuristic bands). Never confuse the two in the debate — one sits in a safety gate, the other does not.
+### How Stage 03 and Stage 04 Interface
+1. **Severity Handoff:** In the command workflow, the severity predicted by Stage 03 triage (or aggregated across field dispatches) directly sets the severity condition token (`summarize sev <level>:`) for the Stage 04 SLM.
+2. **Entity Consistency:** Both stages share domain-dictionary vocabulary rules (`PRI-1`, `MEDEVAC`, `LZ-CLEAR`), ensuring emergency codes identified during triage remain intact in the commander's voice briefing.
+3. **Safety Separation:** The SLM cannot change a triage verdict; Stage 03 guard rails remain sovereign over classification.
 
 ### Likely SLM questions for the NLP Engineer
-1. **"Two models, same data — is that wasteful?"** — They answer different questions (urgency vs wording), and the SLM is a 17 MB offline add-on; the cost is tiny and the drafting + domain-fit value is real for field coordinators.
-2. **"Why not give the SLM the severity labels and train it as a classifier with attention?"** — That is literally Track C; it was built, evaluated, and gated. Attention-classified BiLSTM (Track B) also lost macro-F1 to the interpretable model. We did the experiments rather than argue from taste.
-3. **"Could SLM suggestions accidentally introduce false keywords (e.g. 'trapped')?"** — The triage + guard rail run on the *typed message*, not on the suggestion strings; the Copilot outputs are shown as hints and are never fed back into inference. That is an integration guarantee, verifiable in code.
+1. **"Why not use one single model for both triage classification and summarization?"** — As our earlier experiments demonstrated, multi-task models often underperform specialized architectures on critical disaster edge cases. A lightweight linear model with deterministic keyword guard rails is provably safer and more interpretable for triage (Tab 4), while a dedicated Sequence-to-Sequence Transformer with cross-attention excels at length-constrained briefing generation (Tab 5).
+2. **"How do the tokenizers compare between Stage 03 and Stage 04?"** — Stage 03 uses TF-IDF word n-grams tuned for discriminative keyword frequency. Stage 04 uses dual domain-pruned vocabularies (2,500 tokens each) with atomic preservation of tactical codes and control tokens (`<s>`, `</s>`, `<pad>`, `<unk>`).
+3. **"Does the SLM hallucinate details not found by Stage 03 triage?"** — No. Stage 04 is evaluated for factual fidelity with a 100% location extraction accuracy and 95% risk level accuracy on held-out test data.

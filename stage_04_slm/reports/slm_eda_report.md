@@ -1,27 +1,30 @@
-# Stage 04 SLM | EDA Report: Tactical Briefing Audit
+# Stage 04 SLM | EDA Report: Severity-Conditioned Tactical Briefing Audit
 
 ## 1. Executive Summary & Team Huddle Verification
-- **Curated Pairs:** 2400 pairs (Train: 1920, Val: 240, Test: 240).
-- **Avg Incident Log Length:** 171.2 tokens (158.1 words) → ~67.8 seconds reading time.
-- **Avg Tactical Briefing Length:** 21.7 tokens (21.6 words) → ~9.2 seconds voice briefing time.
-- **Time Savings (Reduction %):** **85.0%** (Exceeds the >80% Team Huddle threshold by 5.0%).
-- **Brevity Compliance:** 100% of curated summaries consist of **strictly 2 actionable sentences**.
+- **Total Curated Dataset:** 2,400 pairs across LOW (800), MODERATE (800), and SEVERE (800).
+- **Severity-Conditioned Length Rule Compliance:**
+  - **LOW (< 1 sentence):** 100.0% adherence (avg words: 10.2, 0 terminal full-stops).
+  - **MODERATE (1 sentence):** 100.0% adherence (avg words: 15.5, exactly 1 full-stop).
+  - **SEVERE (2 sentences):** 100.0% adherence (avg words: 24.3, exactly 2 full-stops).
+- **Team Huddle Reading Time Savings:** **84.7%** average reduction (Exceeds the >80% project threshold).
 
-## 2. Domain Dictionary & Radio Shorthand Coverage
-The fine-tuning dataset successfully preserves critical tactical and evacuation radio shorthand:
-| Tactical Code | Category | Occurrences | Share of Briefings |
-| :--- | :--- | :---: | :---: |
-| `LZ-CLEAR` | Evacuation And Rescue | 1693 | 70.5% |
-| `SITREP` | Radio Shorthand | 1596 | 66.5% |
-| `PRI-2` | Radio Shorthand | 1316 | 54.8% |
-| `SAR` | Evacuation And Rescue | 1179 | 49.1% |
-| `FLOOD-SURGE` | Hazard And Logistics | 1053 | 43.9% |
-| `PRI-1` | Radio Shorthand | 1029 | 42.9% |
-| `WATER-PT` | Hazard And Logistics | 778 | 32.4% |
-| `RATION-DEP` | Hazard And Logistics | 709 | 29.5% |
-| `LZ-HOT` | Evacuation And Rescue | 707 | 29.5% |
-| `10-4` | Radio Shorthand | 614 | 25.6% |
-| `EVAC-ORDER` | Evacuation And Rescue | 594 | 24.8% |
-| `ROGER` | Radio Shorthand | 573 | 23.9% |
+## 2. Key Factor Annotations
+- **Location Extraction:** 100% of samples annotated with valid sector/ward/landmark coordinates.
+- **Casualty / Civilian Impact:** Quantified across 100% of SEVERE alerts.
+- **Risk Level:** Balanced 1:1:1 across LOW, MODERATE, SEVERE.
 
-> **EDA Conclusion:** The token distribution demonstrates dramatic compression without information loss. The incident commander receives a 5-second voice briefing with 85% reading time savings while retaining 100% of tactical priority and evacuation directives.
+## 3. Top Tactical Codes Represented
+| Code | Category | Occurrences in Target Summaries |
+| :--- | :--- | :---: |
+| `PRI-1` | Tactical Code | 800 |
+| `LZ-CLEAR` | Tactical Code | 558 |
+| `SITREP` | Tactical Code | 482 |
+| `FLOOD-SURGE` | Tactical Code | 481 |
+| `SAR` | Tactical Code | 253 |
+| `LZ-HOT` | Tactical Code | 242 |
+| `MEDEVAC` | Tactical Code | 219 |
+| `EVAC-ORDER` | Tactical Code | 170 |
+| `ROGER` | Tactical Code | 162 |
+| `10-4` | Tactical Code | 153 |
+
+> **EDA Verdict: PASSED [SUCCESS].** The dataset adheres strictly to the severity-conditioned length rules and verifies >80% reading time savings.
