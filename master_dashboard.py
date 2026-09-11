@@ -19,12 +19,15 @@ STAGE_01_DIR = os.path.join(BASE_DIR, "stage_01_ml")
 STAGE_02_DIR = os.path.join(BASE_DIR, "stage_02_dl")
 STAGE_03_DIR = os.path.join(BASE_DIR, "stage_03_nlp")
 STAGE_04_DIR = os.path.join(BASE_DIR, "stage_04_slm")
+STAGE_05_DIR = os.path.join(BASE_DIR, "stage_05_genai")
 if STAGE_01_DIR not in sys.path:
     sys.path.insert(0, STAGE_01_DIR)
 if STAGE_03_DIR not in sys.path:
     sys.path.insert(0, STAGE_03_DIR)
 if STAGE_04_DIR not in sys.path:
     sys.path.insert(0, STAGE_04_DIR)
+if STAGE_05_DIR not in sys.path:
+    sys.path.insert(0, STAGE_05_DIR)
 import safety_guard  # noqa: F401 – enables joblib to unpickle GuardRailedPredictor
 
 # =============================================================================
@@ -445,6 +448,14 @@ def load_all_models():
         models_dict['slm'] = None
         print(f"Error loading SLM assistant: {e}")
 
+    # 6. GenAI Scenario Studio & Stress Tester (Stage 5)
+    try:
+        from stage_05_genai.integration_engineer.genai_integration import GenAiDashboardIntegration
+        models_dict['genai'] = GenAiDashboardIntegration()
+    except Exception as e:
+        models_dict['genai'] = None
+        print(f"Error loading GenAI integration: {e}")
+
     return models_dict
 
 MODELS = load_all_models()
@@ -486,21 +497,22 @@ st.markdown(f"""
 </div>
 
 <div class="hero">
-    <div class="kicker">Stage 01 ML · Stage 02 Deep Learning · Stage 03 NLP · Stage 04 SLM Unified Platform</div>
+    <div class="kicker">Stage 01 ML · Stage 02 Deep Learning · Stage 03 NLP · Stage 04 SLM · Stage 05 Generative AI</div>
     <h1><span class="grad">Disaster Response Operations</span></h1>
-    <div class="subtitle">Predict flood risk tiers, detect aerial inundation, triage emergency text reports, and forecast hydrological river dynamics with zero congestion.</div>
+    <div class="subtitle">Predict flood risk tiers, detect aerial inundation, triage emergency text reports, forecast river dynamics, and battle-test the entire pipeline with GenAI synthetic disaster scenarios.</div>
 </div>
 """, unsafe_allow_html=True)
 
 # =============================================================================
 # MODULAR SECTION TABS (Eliminates Congestion)
 # =============================================================================
-tab_ml, tab_vision, tab_ts, tab_nlp, tab_slm, tab_overview = st.tabs([
+tab_ml, tab_vision, tab_ts, tab_nlp, tab_slm, tab_genai, tab_overview = st.tabs([
     "🤖 Stage 01: ML Risk Classifier",
     "📸 Stage 02: Aerial Drone Vision",
     "📈 Stage 02: Time-Series Forecaster",
     "💬 Stage 03: NLP Message Triage",
     "🎙️ Stage 04: SLM Severity Summarizer",
+    "🧠 Stage 05: GenAI Scenario Studio",
     "🌐 Unified Command Center"
 ])
 
@@ -1320,16 +1332,260 @@ with tab_slm:
                 eval_png = os.path.join(STAGE_04_DIR, "reports", "figures", "slm_evaluation.png")
                 eda_png = os.path.join(STAGE_04_DIR, "reports", "figures", "slm_eda.png")
                 if os.path.exists(eval_png):
-                    c_fig1.image(eval_png, caption="Held-Out Test Set: Fidelity & Length Rule Compliance", use_container_width=True)
+                    c_fig1.image(eval_png, caption="Held-Out Test Set: Fidelity & Length Rule Compliance", use_column_width=True)
                 if os.path.exists(eda_png):
-                    c_fig2.image(eda_png, caption="Severity Length Distribution & Reading Time Savings", use_container_width=True)
+                    c_fig2.image(eda_png, caption="Severity Length Distribution & Reading Time Savings", use_column_width=True)
 
         except Exception as e:
             st.error(f"Tactical Briefing SLM error: {e}")
 
 
 # =============================================================================
-# TAB 5: UNIFIED INCIDENT COMMAND CENTER (MULTI-MODAL OVERVIEW)
+# TAB 6: STAGE 05 — GENERATIVE AI: SCENARIO STUDIO & PIPELINE BATTLE-TESTER
+# =============================================================================
+with tab_genai:
+    st.markdown(
+        '<div class="panel-title"><span class="badge" style="background:#a855f7; color:white;">STAGE 05 GEN AI</span> '
+        'Generative Disaster Scenario Studio & Pipeline Battle-Testing ("Teach it to imagine what hasn\'t happened yet")</div>',
+        unsafe_allow_html=True
+    )
+
+    if MODELS.get('genai') is None:
+        st.warning("Stage 05 GenAI integration module not loaded.")
+    else:
+        genai_tool = MODELS['genai']
+        col_gen_in, col_gen_out = st.columns([1.15, 1.25], gap="large")
+
+        with col_gen_in:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            st.markdown('<div class="panel-title"><span class="badge">STUDIO</span> Synthetic Scenario Generator & Preset Selector</div>', unsafe_allow_html=True)
+
+            scenario_mode = st.radio(
+                "Generation Mode",
+                ["⚡ 20-Event Benchmark Battery & Wildcard", "🛠️ Custom Compound Scenario Builder"],
+                horizontal=True
+            )
+
+            current_scen = None
+            if scenario_mode.startswith("⚡"):
+                scen_list = genai_tool.get_available_scenarios()
+                scen_names = [s["name"] for s in scen_list]
+                selected_scen_name = st.selectbox("Select Scenario Catalog Item", scen_names, index=0)
+                selected_scen_id = next(s["id"] for s in scen_list if s["name"] == selected_scen_name)
+                current_scen = genai_tool.load_scenario(selected_scen_id)
+
+                # Quick action buttons
+                q_col1, q_col2 = st.columns(2)
+                if q_col1.button("⭐ Launch Wildcard Capstone", use_container_width=True):
+                    current_scen = genai_tool.load_scenario("WILDCARD-CAPSTONE")
+                if q_col2.button("🎲 Random Stress Scenario", use_container_width=True):
+                    rand_id = np.random.choice([s["id"] for s in scen_list if s["id"] != "WILDCARD-CAPSTONE"])
+                    current_scen = genai_tool.load_scenario(rand_id)
+
+            else:
+                c_c1, c_c2 = st.columns(2)
+                c_name = c_c1.text_input("Scenario Title", "Midnight Coastal Cloudburst & Grid Failure")
+                c_hazard = c_c2.selectbox("Primary Hazard", ["Estuarine Cloudburst", "Dam Overtopping", "Tidal Storm Surge", "Arterial Bridge Scour"])
+                
+                c_c3, c_c4 = st.columns(2)
+                c_sev = c_c3.selectbox("Target Severity Tier", ["SEVERE", "MODERATE", "LOW", "WILDCARD"], index=0)
+                c_zone = c_c4.selectbox("Geographic Basin", list(ZONES.keys()), format_func=lambda z: ZONES[z]["label"], index=2)
+
+                st.markdown("<b>Compound Failure Invariants:</b>", unsafe_allow_html=True)
+                f_c1, f_c2 = st.columns(2)
+                c_blackout = f_c1.checkbox("⚡ Total Municipal Grid Blackout", value=True)
+                c_tide = f_c2.checkbox("🌊 4.8m Astronomical Spring Tide Lock", value=True)
+                
+                f_c3, f_c4 = st.columns(2)
+                c_sensor = f_c3.selectbox("Gauge Telemetry Status", ["Healthy", "Corrupted_Zero (Submerged)", "Frozen_Gauge"], index=1)
+                c_people = f_c4.slider("Casualty / Stranded Estimate", 5, 250, 45)
+
+                if st.button("✨ Synthesize Custom Scenario", use_container_width=True):
+                    s_health_code = "Corrupted_Zero" if "Corrupted" in c_sensor else ("Frozen_Gauge" if "Frozen" in c_sensor else "Healthy")
+                    current_scen = genai_tool.generate_custom_scenario(
+                        name=c_name, hazard=c_hazard, severity=c_sev, zone_id=c_zone,
+                        blackout=c_blackout, tidal_surge=c_tide, sensor_health=s_health_code, people=c_people
+                    )
+                    st.session_state["active_genai_scen"] = current_scen
+                elif "active_genai_scen" in st.session_state:
+                    current_scen = st.session_state["active_genai_scen"]
+                else:
+                    current_scen = genai_tool.load_scenario("WILDCARD-CAPSTONE")
+
+            # SCENARIO CARD PREVIEW
+            if current_scen is not None:
+                st.session_state["active_genai_scen"] = current_scen
+                st.markdown("<hr class='glow'>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="background:rgba(16,25,48,0.85); border:1px solid rgba(168,85,247,0.4); border-radius:10px; padding:12px 16px; margin-bottom:12px;">
+                    <div style="font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:#c084fc; font-weight:700;">
+                        {current_scen.get('regime', 'Synthetic Event')} · {current_scen['scenario_id']}
+                    </div>
+                    <div style="font-size:1.15rem; font-weight:800; color:#f8fafc; margin-top:2px;">{current_scen['scenario_name']}</div>
+                    <div style="font-size:0.88rem; color:#cbd5e1; margin-top:6px; line-height:1.4;">{current_scen['narrative']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                tab_s1, tab_s2, tab_s3 = st.tabs(["📊 Sensor Telemetry", "💬 SOS Civilian Message", "📻 Tactical Radio Log"])
+                with tab_s1:
+                    t_df = current_scen["tabular_df"]
+                    st.dataframe(t_df[['river_level', 'rainfall', 'emergency_call_volume', 'road_closures', 'bridge_closures', 'rainfall_rolling_72h_sum']], use_container_width=True)
+                    if current_scen.get("sensor_health") == "Corrupted_Zero":
+                        st.error("⚠️ ADVERSARIAL STRESS: Physical river gauge is submerged & reading 0.0m! Testing if Stage 01 guardrails prevent false-safe classification.")
+                with tab_s2:
+                    st.info(current_scen["sos_message"])
+                with tab_s3:
+                    st.code(current_scen["tactical_dispatch"], language="text")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with col_gen_out:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            st.markdown('<div class="panel-title"><span class="badge">BATTLE-TEST</span> Live Multi-Agent Pipeline Verification</div>', unsafe_allow_html=True)
+
+            if st.button("⚡ BATTLE-TEST FULL PIPELINE ACROSS ALL 4 STAGES", use_container_width=True, type="primary"):
+                st.session_state["run_battle_test"] = True
+
+            if st.session_state.get("run_battle_test", False) and current_scen is not None:
+                bt = genai_tool.battle_test_pipeline(current_scen, MODELS, DEVICE)
+
+                # 4-Stage Response Grid
+                st.markdown("<b style='color:#cbd5e1;'>Multi-Model Simultaneous Verdicts:</b>", unsafe_allow_html=True)
+                g1, g2 = st.columns(2)
+
+                # STAGE 01 CARD
+                s1 = bt["stage_01"]
+                s1_cls = "res-severe" if s1["pred"] == "SEVERE" else ("res-moderate" if s1["pred"] == "MODERATE" else "res-low")
+                with g1:
+                    st.markdown(f"""
+                    <div class="result-card {s1_cls}" style="padding:12px;">
+                        <div style="font-size:0.75rem; letter-spacing:1.5px; text-transform:uppercase; color:#94a3b8;">Stage 01 ML Classifier</div>
+                        <div style="font-size:1.2rem; font-weight:800; color:#fff; margin-top:2px;">◈ {s1['pred']} ◈</div>
+                        <div style="font-size:0.8rem; color:#cbd5e1; margin-top:4px;">
+                            {'🛡️ Guardrail: TRIPPED' if s1['guard_tripped'] else '🛡️ Guardrail: Nominal'}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # STAGE 02 CARD
+                s2 = bt["stage_02"]
+                s2_col = "#ef4444" if s2["breached"] else ("#f59e0b" if s2["peak_12h"] >= 3.5 else "#10b981")
+                with g2:
+                    st.markdown(f"""
+                    <div class="result-card" style="padding:12px; border-color:{s2_col};">
+                        <div style="font-size:0.75rem; letter-spacing:1.5px; text-transform:uppercase; color:#94a3b8;">Stage 02 LSTM Hydrograph</div>
+                        <div style="font-size:1.2rem; font-weight:800; color:{s2_col}; margin-top:2px;">Peak: {s2['peak_12h']:.2f}m</div>
+                        <div style="font-size:0.8rem; color:#cbd5e1; margin-top:4px;">
+                            {'🚨 CRITICAL LEVEE BREACH' if s2['breached'] else 'Forecast Delta: ' + str(s2['delta_12h']) + 'm'}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                g3, g4 = st.columns(2)
+                # STAGE 03 CARD
+                s3 = bt["stage_03"]
+                s3_cls = "res-severe" if s3["pred"] == "SEVERE" else ("res-moderate" if s3["pred"] == "MODERATE" else "res-low")
+                with g3:
+                    st.markdown(f"""
+                    <div class="result-card {s3_cls}" style="padding:12px; margin-top:8px;">
+                        <div style="font-size:0.75rem; letter-spacing:1.5px; text-transform:uppercase; color:#94a3b8;">Stage 03 NLP Triage</div>
+                        <div style="font-size:1.2rem; font-weight:800; color:#fff; margin-top:2px;">◈ {s3['pred']} ◈</div>
+                        <div style="font-size:0.8rem; color:#cbd5e1; margin-top:4px;">Confidence: {s3['confidence']:.1f}%</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # STAGE 04 CARD
+                s4 = bt["stage_04"]
+                with g4:
+                    st.markdown(f"""
+                    <div class="result-card res-severe" style="padding:12px; margin-top:8px;">
+                        <div style="font-size:0.75rem; letter-spacing:1.5px; text-transform:uppercase; color:#94a3b8;">Stage 04 SLM Briefing</div>
+                        <div style="font-size:1.2rem; font-weight:800; color:#fff; margin-top:2px;">{s4['sentence_count']} Sentences</div>
+                        <div style="font-size:0.8rem; color:#cbd5e1; margin-top:4px;">Compliance: 100% Brevity</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # SLM Voice Briefing Player
+                st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+                safe_audio_text = s4["briefing"].replace('"', '\\"').replace("'", "\\'")
+                audio_html_g5 = f"""
+                <div style="display:flex; align-items:center; margin: 8px 0 12px 0;">
+                    <button onclick="playGenAiBriefing()" style="
+                        background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+                        color: white; border: none; border-radius: 8px; padding: 8px 16px;
+                        font-size: 0.88rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+                        box-shadow: 0 2px 12px rgba(168, 85, 247, 0.4);">
+                        🔊 Play Tactical Voice Briefing for Synthetic Event
+                    </button>
+                    <span id="genai-voice-status" style="font-size: 0.82rem; color: #94a3b8; margin-left: 12px;">Audio Ready</span>
+                </div>
+                <script>
+                function playGenAiBriefing() {{
+                    if ('speechSynthesis' in window) {{
+                        window.speechSynthesis.cancel();
+                        var utterance = new SpeechSynthesisUtterance("{safe_audio_text}");
+                        utterance.rate = 1.05;
+                        utterance.pitch = 1.0;
+                        var status = document.getElementById("genai-voice-status");
+                        if (status) status.innerText = "Transmitting synthesized briefing...";
+                        utterance.onend = function() {{
+                            if (status) status.innerText = "Briefing transmission complete.";
+                        }};
+                        window.speechSynthesis.speak(utterance);
+                    }}
+                }}
+                </script>
+                """
+                st.components.v1.html(audio_html_g5, height=48)
+
+                st.markdown(f"""
+                <div style="background:rgba(15,23,42,0.7); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:10px 14px; margin-top:8px;">
+                    <div style="font-size:0.8rem; color:#94a3b8;">SLM Tactical Briefing Output:</div>
+                    <div style="font-size:0.95rem; color:#f8fafc; font-weight:600; margin-top:2px;">"{s4['briefing']}"</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Key Factors Badges
+                kf1, kf2, kf3, kf4 = st.columns(4)
+                kf1.metric("Impacted Location", s4.get("location") or current_scen["zone_id"])
+                kf2.metric("People at Risk", f"~{s4.get('people') or current_scen['people_impact']}")
+                kf3.metric("Risk Posture", s4.get("risk") or current_scen["severity"])
+                kf4.metric("E2E Latency", f"{bt['total_latency_ms']} ms", delta="-Cloud RT", delta_color="normal")
+            else:
+                st.info("Select a scenario on the left and click **'BATTLE-TEST FULL PIPELINE'** to simulate the disaster across all stages.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # LOWER EXPANDERS FOR VIVA & REPORTING
+        st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
+        with st.expander("⭐ THE WILDCARD CAPSTONE CHALLENGE: Operation Blackout Deluge (Live Defense Storyboard)", expanded=False):
+            st.markdown("""
+            ### Capstone Story: Operation Blackout Deluge (The Midnight Grid Collapse & ICU Crisis)
+            - **The Scenario**: At 02:30 IST, an unprecedented 180 mm/hr cloudburst strikes the Kurla basin coincided with a 4.8m astronomical spring high tide locking Arabian Sea drainage outfalls.
+            - **The Cascading Shocks**:
+              1. **Substation Arc & Grid Blackout**: The Dharavi 220kV substation floods, plunging 3 municipal wards into complete pitch blackness.
+              2. **Cellular Tower Depletion**: Backup cell tower batteries deplete, cutting off consumer telephony.
+              3. **Hospital ICU Crisis**: Basement backup diesel generators at Municipal General Hospital are submerged under 1.2m water, leaving 28 patients on mechanical ventilators with only 15 minutes of internal battery reserves.
+              4. **Adversarial Sensor Failure**: The primary Mithi river gauge electronics short-circuit and report a deceptive **0.0m level**.
+            - **How AquaShield Survived the Stress**:
+              - **Stage 01 Guardrail Intervention**: The classical Random Forest initially saw 0.0m river water, but the `GuardRailedPredictor` detected 180mm rolling rainfall and 490 calls/hr, immediately forcing a **SEVERE** emergency directive.
+              - **Stage 02 LSTM Surge Prediction**: Correctly modeled blocked sea drainage and forecast a rapid crest to 5.75m within 3 hours.
+              - **Stage 03 NLP Triage**: Extracted critical entities (`Location: Municipal Hospital`, `People: 28 ICU patients`, `Threat: Ventilator battery expiration`) with 97% confidence.
+              - **Stage 04 SLM Voice Briefing**: Delivered an instant 2-sentence voice directive: *"COMMAND DISPATCH: PRI-1 MEDEVAC alert for Municipal Hospital Zone C. 28 ICU patients critical as floodwater submerged basement generators under total city blackout. Deploy amphibious rescue craft with mobile generators immediately."* in **85.7 ms**.
+            """)
+
+        with st.expander("📊 20-Event Pipeline Benchmark Scorecard & Stress Radar Figures", expanded=False):
+            fig_p = os.path.join(STAGE_05_DIR, "reports", "figures", "genai_stress_evaluation.png")
+            if os.path.exists(fig_p):
+                st.image(fig_p, caption="Stage 05 Stress Test Battery Evaluation: 20 Synthetic Events + Wildcard Capstone", use_column_width=True)
+            rep_p = os.path.join(STAGE_05_DIR, "reports", "genai_stress_report.md")
+            if os.path.exists(rep_p):
+                with open(rep_p, "r", encoding="utf-8") as f:
+                    st.markdown(f.read())
+
+
+# =============================================================================
+# TAB 7: UNIFIED INCIDENT COMMAND CENTER (MULTI-MODAL OVERVIEW)
 # =============================================================================
 with tab_overview:
     st.markdown('<div class="panel-title"><span class="badge">FUSION</span> Multi-Agent Emergency Operations Synthesis</div>', unsafe_allow_html=True)

@@ -1,0 +1,143 @@
+{
+  "description": "Historical disaster baseline seeds and empirical parameters for generative scenario synthesis in AquaShield Command.",
+  "seeds": {
+    "mumbai_2005_deluge": {
+      "name": "Mumbai 2005 Cloudburst & Mithi River Overflow",
+      "year": 2005,
+      "disaster_type": "Urban Cloudburst & Estuarine Surge",
+      "primary_zone": "Zone_C",
+      "historical_metrics": {
+        "peak_rainfall_mm_hr": 190.0,
+        "rainfall_24h_mm": 944.0,
+        "river_level_crest_m": 5.85,
+        "river_trend_m_hr": 1.45,
+        "emergency_calls_per_hr": 450,
+        "road_closures": 22,
+        "bridge_closures": 5,
+        "drainage_failure": true,
+        "tide_height_m": 4.48
+      },
+      "characteristics": [
+        "Concurrent astronomical high tide locked municipal sea outfalls",
+        "Mithi River channel overflowed into low-lying Kurla/Sion transport arteries",
+        "Total telecommunication network congestion; power cut to prevent electrocution"
+      ],
+      "tactical_keywords": ["MITHI-OVERFLOW", "KURLA-SUBMERGED", "SION-CUTOFF", "EVAC-ORDER", "HIGH-TIDE-LOCK"]
+    },
+    "kerala_2018_dam_breach": {
+      "name": "Kerala 2018 Multi-Reservoir Inundation",
+      "year": 2018,
+      "disaster_type": "Dam Release & River Basin Surge",
+      "primary_zone": "Zone_B",
+      "historical_metrics": {
+        "peak_rainfall_mm_hr": 115.0,
+        "rainfall_24h_mm": 410.0,
+        "river_level_crest_m": 5.40,
+        "river_trend_m_hr": 0.95,
+        "emergency_calls_per_hr": 380,
+        "road_closures": 16,
+        "bridge_closures": 4,
+        "drainage_failure": false,
+        "tide_height_m": 2.10
+      },
+      "characteristics": [
+        "Concurrent opening of 35 reservoir spillways saturated downstream corridors",
+        "Slow-onset river swell transforming into rapid residential water ingress",
+        "Civilian fishermen mobilized with small skiffs for rooftop evacuations"
+      ],
+      "tactical_keywords": ["DAM-RELEASE", "RESERVOIR-OVERTOPPING", "CAS-EVAC", "ROOF-RESCUE", "PRI-1"]
+    },
+    "hurricane_sandy_surge": {
+      "name": "Hurricane Sandy Coastal Surge & Substation Arc",
+      "year": 2012,
+      "disaster_type": "Coastal Storm Surge & Power Grid Destruction",
+      "primary_zone": "Zone_A",
+      "historical_metrics": {
+        "peak_rainfall_mm_hr": 85.0,
+        "rainfall_24h_mm": 280.0,
+        "river_level_crest_m": 4.90,
+        "river_trend_m_hr": 1.80,
+        "emergency_calls_per_hr": 520,
+        "road_closures": 25,
+        "bridge_closures": 5,
+        "drainage_failure": true,
+        "tide_height_m": 4.25
+      },
+      "characteristics": [
+        "Saltwater storm surge inundated underground transmission substations",
+        "Explosive electrical arc fires followed by district-wide blackout",
+        "Hospital backup diesel generators flooded in basements; emergency ICU evacuation"
+      ],
+      "tactical_keywords": ["GRID-BLACKOUT", "SALT-SURGE", "ICU-EVAC", "SUBSTATION-FAILURE", "CODE-RED"]
+    },
+    "chennai_2015_deluge": {
+      "name": "Chennai 2015 Urban Basin Overflow",
+      "year": 2015,
+      "disaster_type": "Basin Overtopping & Runoff Saturation",
+      "primary_zone": "Zone_C",
+      "historical_metrics": {
+        "peak_rainfall_mm_hr": 140.0,
+        "rainfall_24h_mm": 490.0,
+        "river_level_crest_m": 5.20,
+        "river_trend_m_hr": 1.10,
+        "emergency_calls_per_hr": 340,
+        "road_closures": 18,
+        "bridge_closures": 3,
+        "drainage_failure": true,
+        "tide_height_m": 3.10
+      },
+      "characteristics": [
+        "Uncontrolled water release from Chembarambakkam reservoir into Adyar River",
+        "Airport runway submerged under 2 meters of water",
+        "Severe road-bridge artery severance splitting city into isolated islands"
+      ],
+      "tactical_keywords": ["AIRPORT-SUBMERGED", "ISLAND-CLUSTER", "BOAT-RESCUE", "FOOD-AIRDROP", "SITREP"]
+    }
+  },
+  "distribution_priors": {
+    "river_level": {
+      "normal_mean": 2.1,
+      "normal_std": 0.6,
+      "moderate_mean": 3.6,
+      "moderate_std": 0.4,
+      "severe_mean": 4.9,
+      "severe_std": 0.7,
+      "tail_gpd_xi": 0.28,
+      "tail_gpd_sigma": 0.85,
+      "min_val": 0.5,
+      "max_val": 8.0
+    },
+    "rainfall": {
+      "normal_mean": 12.0,
+      "normal_std": 8.0,
+      "moderate_mean": 65.0,
+      "moderate_std": 15.0,
+      "severe_mean": 135.0,
+      "severe_std": 35.0,
+      "min_val": 0.0,
+      "max_val": 250.0
+    },
+    "emergency_call_volume": {
+      "normal_mean": 25,
+      "normal_std": 10,
+      "moderate_mean": 110,
+      "moderate_std": 25,
+      "severe_mean": 320,
+      "severe_std": 80,
+      "min_val": 0,
+      "max_val": 800
+    },
+    "road_closures": {
+      "normal_mean": 0.5,
+      "moderate_mean": 4.2,
+      "severe_mean": 12.5,
+      "max_val": 30
+    },
+    "bridge_closures": {
+      "normal_mean": 0.05,
+      "moderate_mean": 1.1,
+      "severe_mean": 3.8,
+      "max_val": 10
+    }
+  }
+}

@@ -416,4 +416,36 @@ A: The integration layer in dedicated Tab 5 of `master_dashboard.py` uses the br
 **Q: How are tactical emergency codes preserved?**
 A: A dedicated Domain Dictionary (`domain_dictionary.json`) protects 26 emergency acronyms (`PRI-1`, `MEDEVAC`, `LZ-CLEAR`, `SITREP`, `10-4`). Our tokenizer treats them as atomic tokens, achieving a **>90% tactical code retention rate** on held-out test evaluations.
 
+---
+
+## 13. GenAI (Role 9) quick Q&A: Synthetic Scenario Synthesis & Pipeline Battle-Testing
+
+**Q: What is the core mission of Stage 05 Generative AI?**
+A: Major natural disasters are fortunately rare, leading to sparse and imbalanced historical training records. Our mission is to "teach it to imagine what hasn't happened yet" by using Generative AI to synthesize complex, high-impact multi-zone compound catastrophes and battle-test our entire multi-agent pipeline (Stage 01 ML, Stage 02 DL LSTM/Vision, Stage 03 NLP, Stage 04 SLM) before live field deployment.
+
+**Q: Why generate synthetic disaster data instead of relying solely on historical Kaggle/FEMA datasets?**
+A: Historical datasets suffer from severe survivorship bias and tail-risk truncation (<0.04% of historical records have rainfall >140 mm/hr). Furthermore, historical logs treat hazards in isolation. In reality, disasters strike as **compound cascades** (e.g. cloudburst + electrical grid collapse + astronomical tidal lock). Waiting for a 500-year real-world catastrophe to collect data costs human lives; generative synthesis exposes pipeline vulnerabilities beforehand.
+
+**Q: How do you prevent Generative AI from hallucinating physically impossible weather?**
+A: Our dual-engine synthesizer is governed by **hard physical and hydrological invariants**:
+1. Conservation of mass & lag: Upstream rainfall (>100 mm/hr) must create a delayed downstream gauge swell (+0.5m to +2.5m) within a 1-to-3 hour window.
+2. Inundation coupling: Infrastructure closures scale non-linearly with flood depths.
+3. Domain dictionary preservation: Tactical codes (`PRI-1`, `MEDEVAC`, `LZ-CLEAR`, `SITREP`) are retained in generated emergency dispatches.
+
+**Q: What is the team "Wildcard" Capstone Challenge?**
+A: **"Operation Blackout Deluge (The Midnight Grid Failure & ICU Crisis)"**:
+At 02:30 IST, an unprecedented 180 mm/hr cloudburst strikes Kurla coincided with a 4.8m astronomical spring high tide locking Arabian Sea sea outfalls. The Dharavi 220kV substation floods, plunging 3 municipal wards into complete darkness. Cell tower batteries die. Municipal General Hospital's basement backup diesel generators drown under 1.2m water, leaving 28 ICU patients on mechanical ventilators with only 15 minutes of battery reserve. Concurrently, the primary river gauge short-circuits and reports a deceptive 0.0m reading.
+
+**Q: How did the AquaShield pipeline survive the Wildcard stress test?**
+A: Stage 01's `GuardRailedPredictor` overrode the deceptive 0.0m river gauge, catching the 180mm rolling rainfall and 490 calls/hr to force a SEVERE alert. Stage 02 LSTM predicted a 5.75m levee breach. Stage 03 NLP triaged the ventilator distress message as SEVERE with 97% confidence. Stage 04 SLM generated an instant 2-sentence tactical voice briefing in 85.7 ms ordering amphibious rescue craft and mobile generators to CST Road immediately.
+
+**Q: What are the key benchmark numbers for Stage 05?**
+A:
+- **Total Scenarios Evaluated**: 21 events (20 standardized benchmarks across 4 regimes + 1 Wildcard).
+- **Pipeline Alignment**: 95.2% agreement between ground truth severity and deployed pipeline verdicts.
+- **Guardrail Activation Rate**: 61.9% (13/21 events triggered hard safety guardrails, proving that rule guardrails are indispensable under compound collapse).
+- **Adversarial Sensor Resilience**: 100.0% of submerged 0.0m dead gauges caught by multi-modal telemetry checks.
+- **End-to-End Latency**: 53.8 ms mean across all 4 models simultaneously on a standard laptop CPU.
+
+
 
