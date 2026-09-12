@@ -1453,8 +1453,53 @@ with tab_genai:
             if st.session_state.get("run_battle_test", False) and current_scen is not None:
                 bt = genai_tool.battle_test_pipeline(current_scen, MODELS, DEVICE)
 
+                # OVERALL COMBINED PREDICTED SEVERITY CLASS (GENAI STAGE)
+                overall_cls = bt.get("overall_predicted_class", "SEVERE")
+                consensus_reason = bt.get("consensus_reason", "Multi-Stage Consensus Evaluation")
+                
+                if overall_cls == "SEVERE":
+                    banner_bg = "linear-gradient(135deg, rgba(220, 38, 38, 0.22) 0%, rgba(15, 23, 42, 0.85) 100%)"
+                    border_color = "#ef4444"
+                    shadow_color = "rgba(239, 68, 68, 0.4)"
+                    badge_bg = "#dc2626"
+                    badge_text = "PRIORITY-1 CRITICAL EMERGENCY"
+                    text_color = "#ef4444"
+                elif overall_cls == "MODERATE":
+                    banner_bg = "linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(15, 23, 42, 0.85) 100%)"
+                    border_color = "#f59e0b"
+                    shadow_color = "rgba(245, 158, 11, 0.35)"
+                    badge_bg = "#f59e0b"
+                    badge_text = "ELEVATED PRECAUTIONARY ALERT"
+                    text_color = "#f59e0b"
+                else:
+                    banner_bg = "linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(15, 23, 42, 0.85) 100%)"
+                    border_color = "#10b981"
+                    shadow_color = "rgba(16, 185, 129, 0.35)"
+                    badge_bg = "#10b981"
+                    badge_text = "NOMINAL MONITORING"
+                    text_color = "#10b981"
+
+                st.markdown(f"""
+                <div style="background:{banner_bg}; border:2px solid {border_color}; border-radius:12px; padding:16px 20px; margin-bottom:18px; box-shadow:0 0 20px {shadow_color};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:#cbd5e1; font-weight:700;">
+                            GENAI STAGE ENSEMBLE FUSION
+                        </div>
+                        <span class="badge" style="background:{badge_bg}; color:white; font-size:0.8rem; padding:4px 12px; border-radius:6px; font-weight:700;">
+                            {badge_text}
+                        </span>
+                    </div>
+                    <div style="font-size:2.1rem; font-weight:900; color:#ffffff; margin-top:4px; letter-spacing:0.5px;">
+                        OVERALL PREDICTED CLASS: <span style="color:{text_color};">◈ {overall_cls} ◈</span>
+                    </div>
+                    <div style="font-size:0.88rem; color:#e2e8f0; margin-top:4px;">
+                        <b>Consensus Basis:</b> {consensus_reason}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
                 # 4-Stage Response Grid
-                st.markdown("<b style='color:#cbd5e1;'>Multi-Model Simultaneous Verdicts:</b>", unsafe_allow_html=True)
+                st.markdown("<b style='color:#cbd5e1;'>Supporting Multi-Model Subsystem Evidence:</b>", unsafe_allow_html=True)
                 g1, g2 = st.columns(2)
 
                 # STAGE 01 CARD

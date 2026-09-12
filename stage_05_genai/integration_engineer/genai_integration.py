@@ -212,11 +212,47 @@ class GenAiDashboardIntegration:
 
         total_latency = round((time.perf_counter() - t0) * 1000.0, 2)
 
+        # COMPUTE OVERALL COMBINED PREDICTED SEVERITY CLASS (MULTI-MODAL CONSENSUS)
+        votes = []
+        if s1_res["pred"] in ["SEVERE", "MODERATE", "LOW"]:
+            votes.append(s1_res["pred"])
+        if s2_res["breached"] or s2_res["peak_12h"] >= 5.0:
+            votes.append("SEVERE")
+        elif s2_res["peak_12h"] >= 3.5:
+            votes.append("MODERATE")
+        elif s2_res["peak_12h"] > 0:
+            votes.append("LOW")
+        if s3_res["pred"] in ["SEVERE", "MODERATE", "LOW"]:
+            votes.append(s3_res["pred"])
+
+        # Guardrail hard override: if stage 01 guardrail tripped or levee breached, escalate to SEVERE
+        if s1_res.get("guard_tripped", False) or s2_res.get("breached", False):
+            overall_pred = "SEVERE"
+            consensus_reason = "Safety Override Active: Hard Levee Breach or Sensor Guardrail Threshold Breached"
+        elif votes.count("SEVERE") >= 2:
+            overall_pred = "SEVERE"
+            consensus_reason = f"Ensemble Supermajority: {votes.count('SEVERE')} Subsystem Stages Flagged SEVERE Emergency"
+        elif votes.count("SEVERE") == 1 and votes.count("MODERATE") >= 1:
+            overall_pred = "SEVERE"
+            consensus_reason = "Compound Escalation: Dual Subsystems Exceed Moderate/Severe Warning Limits"
+        elif votes.count("MODERATE") >= 2 or votes.count("SEVERE") == 1:
+            overall_pred = "MODERATE"
+            consensus_reason = f"Elevated Precautionary Tier: {votes.count('MODERATE')} Stages Projecting Moderate Inundation"
+        elif votes.count("LOW") >= 2:
+            overall_pred = "LOW"
+            consensus_reason = "Nominal Baseline: All Upstream Telemetry, Hydrograph, and NLP Streams within Safe Limits"
+        else:
+            overall_pred = scenario.get("severity", "MODERATE")
+            consensus_reason = "Composite Cross-Stage Assessment"
+
         return {
             "stage_01": s1_res,
             "stage_02": s2_res,
             "stage_03": s3_res,
             "stage_04": s4_res,
+            "overall_predicted_class": overall_pred,
+            "combined_severity": overall_pred,
+            "consensus_reason": consensus_reason,
             "total_latency_ms": total_latency,
             "drone_status": scenario.get("drone_recon_status", "UNKNOWN")
         }
