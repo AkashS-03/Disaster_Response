@@ -1,0 +1,10 @@
+scenario_name,rainfall_mm,gauge_level_m,call_volume,risk_label,regime
+Synthetic_LOW_Sample_1,22.7,1.83,29,LOW,Baseline Distribution Sample
+Synthetic_LOW_Sample_2,28.8,1.8,23,LOW,Baseline Distribution Sample
+Synthetic_MODERATE_Sample_1,74.9,4.03,81,MODERATE,Baseline Distribution Sample
+Synthetic_MODERATE_Sample_2,68.0,3.58,82,MODERATE,Baseline Distribution Sample
+Synthetic_SEVERE_Sample_1,126.4,4.74,168,SEVERE,Baseline Distribution Sample
+Synthetic_SEVERE_Sample_2,108.5,4.99,329,SEVERE,Baseline Distribution Sample
+Hyper-Deluge & Total Grid Blackout,209.0,6.21,572,SEVERE,Targeted Compound Blind Spot
+Adversarial Submerged Sensor (0.0m Gauge),180.0,0.0,494,SEVERE,Targeted Compound Blind Spot
+4.8m Astronomical Spring Tide Outfall Lock,95.0,5.85,320,SEVERE,Targeted Compound Blind Spot

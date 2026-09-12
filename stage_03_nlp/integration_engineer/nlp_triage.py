@@ -26,8 +26,12 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from dl_engineer.nlp_utils import clean_text, tokenize, CLASSES  # noqa: E402
-from dl_engineer.nlp_trainer import BiLSTMSeverity, MAX_LEN  # noqa: E402
+try:
+    from stage_03_nlp.dl_engineer.nlp_utils import clean_text, tokenize, CLASSES  # noqa: E402
+    from stage_03_nlp.dl_engineer.nlp_trainer import BiLSTMSeverity, MAX_LEN  # noqa: E402
+except (ImportError, ModuleNotFoundError):
+    from dl_engineer.nlp_utils import clean_text, tokenize, CLASSES  # noqa: E402
+    from dl_engineer.nlp_trainer import BiLSTMSeverity, MAX_LEN  # noqa: E402
 
 SEVERE_FLOOR = [
     "trapped", "drowning", "drown", "rescue", "rescuing", "stranded",
@@ -183,7 +187,10 @@ class NlpTriage:
         return self.stat.predict_proba([text])[0]
 
     def _deep_proba(self, text):
-        from dl_engineer.nlp_utils import encode
+        try:
+            from stage_03_nlp.dl_engineer.nlp_utils import encode
+        except (ImportError, ModuleNotFoundError):
+            from dl_engineer.nlp_utils import encode
         x = torch.tensor(np.array(
             encode([text], self.deep_vocab, MAX_LEN), dtype=np.int64))
         with torch.no_grad():

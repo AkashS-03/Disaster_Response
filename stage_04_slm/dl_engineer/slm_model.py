@@ -25,7 +25,10 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from data_engineer.slm_utils import SPECIAL, SOS, EOS, PAD, UNK, text_to_ids, ids_to_text, tokenize  # noqa: E402
+try:
+    from stage_04_slm.data_engineer.slm_utils import SPECIAL, SOS, EOS, PAD, UNK, text_to_ids, ids_to_text, tokenize  # noqa: E402
+except (ImportError, ModuleNotFoundError):
+    from data_engineer.slm_utils import SPECIAL, SOS, EOS, PAD, UNK, text_to_ids, ids_to_text, tokenize  # noqa: E402
 
 PAD_IDX = SPECIAL[PAD]
 SOS_IDX = SPECIAL[SOS]

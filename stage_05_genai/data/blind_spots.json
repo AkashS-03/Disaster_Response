@@ -1,0 +1,32 @@
+[
+  {
+    "id": "BLIND-01",
+    "scenario_name": "Hyper-Deluge & Total Grid Blackout",
+    "condition": "rainfall > 190.0mm AND call_volume > 520",
+    "rainfall_mm": 209.0,
+    "gauge_level_m": 6.21,
+    "call_volume": 572,
+    "risk_label": "SEVERE",
+    "notes": "Simultaneous peak atmospheric rainfall and grid communications collapse."
+  },
+  {
+    "id": "BLIND-02",
+    "scenario_name": "Adversarial Submerged Sensor (0.0m Gauge)",
+    "condition": "river gauge submerged and reading 0.0m during 180mm storm",
+    "rainfall_mm": 180.0,
+    "gauge_level_m": 0.0,
+    "call_volume": 494,
+    "risk_label": "SEVERE",
+    "notes": "Tests if pipeline falls prey to sensor failure or catches rain/call elevation."
+  },
+  {
+    "id": "BLIND-03",
+    "scenario_name": "4.8m Astronomical Spring Tide Outfall Lock",
+    "condition": "astronomical high tide locking sea gates with steady 95mm downpour",
+    "rainfall_mm": 95.0,
+    "gauge_level_m": 5.85,
+    "call_volume": 320,
+    "risk_label": "SEVERE",
+    "notes": "Drainage channels blocked by sea backpressure."
+  }
+]

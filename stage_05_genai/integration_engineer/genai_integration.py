@@ -4,8 +4,12 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional
 
-from ..genai_engineer.scenario_generator import ScenarioGenerator
-from ..evaluation_engineer.stress_tester import StressTestBattery, BENCHMARK_20_SPECS, WILDCARD_CAPSTONE_SPEC
+try:
+    from stage_05_genai.genai_engineer.scenario_generator import ScenarioGenerator
+    from stage_05_genai.evaluation_engineer.stress_tester import StressTestBattery, BENCHMARK_20_SPECS, WILDCARD_CAPSTONE_SPEC
+except (ImportError, ValueError):
+    from ..genai_engineer.scenario_generator import ScenarioGenerator
+    from ..evaluation_engineer.stress_tester import StressTestBattery, BENCHMARK_20_SPECS, WILDCARD_CAPSTONE_SPEC
 
 
 class GenAiDashboardIntegration:
@@ -164,12 +168,30 @@ class GenAiDashboardIntegration:
         s4_res = {"briefing": "", "location": "", "people": 0, "risk": "", "sentence_count": 0, "latency_ms": 0.0}
         if models_dict.get('slm') is not None:
             try:
-                slm_out = models_dict['slm'].brief(scenario["tactical_dispatch"], scenario_severity=scenario["severity"])
+                if hasattr(models_dict['slm'], 'brief'):
+                    slm_out = models_dict['slm'].brief(scenario["tactical_dispatch"], scenario_severity=scenario["severity"])
+                else:
+                    res_slm = models_dict['slm'].generate_briefing(scenario["tactical_dispatch"], severity=scenario["severity"])
+                    factors = res_slm.get("key_factors", {})
+                    num_str = str(factors.get("num_people", "0"))
+                    import re
+                    nums = re.findall(r"\d+", num_str)
+                    people_cnt = int(nums[0]) if nums else scenario.get("people_impact", 0)
+                    slm_out = {
+                        "briefing": res_slm["briefing"],
+                        "factors": {
+                            "location": factors.get("location", scenario["zone_id"]),
+                            "people_count": people_cnt,
+                            "risk_level": factors.get("risk_level", res_slm["severity"])
+                        },
+                        "sentences_count": res_slm["sentence_count"],
+                        "latency_ms": res_slm.get("latency_ms", 85.0)
+                    }
                 s4_res["briefing"] = slm_out["briefing"]
                 s4_res["location"] = slm_out["factors"].get("location", "")
                 s4_res["people"] = slm_out["factors"].get("people_count", 0)
                 s4_res["risk"] = slm_out["factors"].get("risk_level", "")
-                s4_res["sentence_count"] = slm_out["sentences_count"]
+                s4_res["sentence_count"] = slm_out.get("sentences_count", slm_out.get("sentence_count", 1))
                 s4_res["latency_ms"] = slm_out.get("latency_ms", 85.7)
             except Exception:
                 pass
