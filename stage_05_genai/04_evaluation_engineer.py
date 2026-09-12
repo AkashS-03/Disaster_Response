@@ -29,6 +29,7 @@ print(f"Total synthetic scenarios to evaluate: {len(synthetic)}\n")
 # =====================================================================
 print("--- 1. REALISM TEST ---")
 realism_passes = 0
+show_count = 5 if len(synthetic) > 20 else len(synthetic)
 
 for i, row in synthetic.iterrows():
     # Plausibility criteria
@@ -40,9 +41,12 @@ for i, row in synthetic.iterrows():
     if is_realistic:
         realism_passes += 1
 
-    status = "PASS" if is_realistic else "FAIL"
-    print(f"Scenario {i+1} [{status}]: {row['scenario_name']} "
-          f"(Rain: {row['rainfall_mm']}mm, Gauge: {row['gauge_level_m']}m, Calls: {row['call_volume']})")
+    if i < show_count or i >= len(synthetic) - 3:
+        status = "PASS" if is_realistic else "FAIL"
+        print(f"Scenario {i+1:04d} [{status}]: {row['scenario_name'][:35]:<35} "
+              f"(Rain: {row['rainfall_mm']}mm, Gauge: {row['gauge_level_m']}m, Calls: {row['call_volume']})")
+    elif i == show_count:
+        print(f"... [{len(synthetic) - show_count - 3} intermediate scenarios audited ...] ...")
 
 realism_pct = (realism_passes / len(synthetic)) * 100.0
 print(f">> Realism Test Score: {realism_pct:.1f}% ({realism_passes}/{len(synthetic)} passed)\n")
@@ -81,7 +85,10 @@ for i, row in synthetic.iterrows():
     else:
         confidence_passes += 1
 
-    print(f"Scenario {i+1}: {row['scenario_name']} | Conf: {confidence:.1f}% -> {conf_verdict}")
+    if i < show_count or i >= len(synthetic) - 3:
+        print(f"Scenario {i+1:04d}: {row['scenario_name'][:35]:<35} | Conf: {confidence:.1f}% -> {conf_verdict}")
+    elif i == show_count:
+        print(f"... [{len(synthetic) - show_count - 3} intermediate confidence calibrations evaluated ...] ...")
 
 conf_pct = (confidence_passes / len(synthetic)) * 100.0
 print(f">> Confidence Test Score: {conf_pct:.1f}% (Overconfident errors: {overconfident_errors})\n")
@@ -90,6 +97,8 @@ print(f">> Confidence Test Score: {conf_pct:.1f}% (Overconfident errors: {overco
 # 3. COMBINED OVERALL PREDICTED SEVERITY CLASS
 # =====================================================================
 print("--- 3. COMBINED OVERALL PREDICTED SEVERITY CLASS ---")
+pred_counts = {"LOW": 0, "MODERATE": 0, "SEVERE": 0}
+
 for i, row in synthetic.iterrows():
     rain = row["rainfall_mm"]
     gauge = row["gauge_level_m"]
@@ -104,8 +113,17 @@ for i, row in synthetic.iterrows():
     else:
         overall_pred = "LOW"
 
-    match = "[MATCH]" if overall_pred == target else "[SAFETY OVERRIDE]"
-    print(f"Scenario {i+1}: {row['scenario_name'][:30]:<30} | Target: {target:<8} | Overall Predicted: {overall_pred:<8} | {match}")
+    pred_counts[overall_pred] += 1
+
+    if i < show_count or i >= len(synthetic) - 3:
+        match = "[MATCH]" if overall_pred == target else "[SAFETY OVERRIDE]"
+        print(f"Scenario {i+1:04d}: {row['scenario_name'][:30]:<30} | Target: {target:<8} | Overall Predicted: {overall_pred:<8} | {match}")
+    elif i == show_count:
+        print(f"... [{len(synthetic) - show_count - 3} intermediate ensemble predictions fused ...] ...")
+
+print(f"\nOverall Predicted Class Distribution across {len(synthetic)} Scenarios:")
+for cls, cnt in pred_counts.items():
+    print(f"  - {cls:<9}: {cnt:4d} scenarios ({(cnt/len(synthetic))*100:.1f}%)")
 print()
 
 # =====================================================================

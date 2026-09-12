@@ -50,7 +50,7 @@ blind_spots = [
         "id": "BLIND-01",
         "scenario_name": "Hyper-Deluge & Total Grid Blackout",
         "condition": f"rainfall > {max_rain}mm AND call_volume > {max_calls}",
-        "rainfall_mm": round(float(max_rain * 1.10), 1),
+        "rainfall_mm": min(245.0, round(float(max_rain * 1.04), 1)),
         "gauge_level_m": round(float(max_gauge * 1.05), 2),
         "call_volume": int(max_calls * 1.10),
         "risk_label": "SEVERE",
@@ -75,6 +75,36 @@ blind_spots = [
         "call_volume": 320,
         "risk_label": "SEVERE",
         "notes": "Drainage channels blocked by sea backpressure."
+    },
+    {
+        "id": "BLIND-04",
+        "scenario_name": "Upstream Dam Spillway & Arterial Bridge Scour",
+        "condition": "dam overtopping combined with highway bridge failure",
+        "rainfall_mm": 165.0,
+        "gauge_level_m": 6.80,
+        "call_volume": int(max_calls * 1.05),
+        "risk_label": "SEVERE",
+        "notes": "Catastrophic channel discharge and transportation severance."
+    },
+    {
+        "id": "BLIND-05",
+        "scenario_name": "Rapid Flash Inundation (+2.5m in 45 min)",
+        "condition": "cloudburst over impervious urban core",
+        "rainfall_mm": 150.0,
+        "gauge_level_m": 6.25,
+        "call_volume": 490,
+        "risk_label": "SEVERE",
+        "notes": "Fastest rate-of-rise hydrological test case."
+    },
+    {
+        "id": "BLIND-06",
+        "scenario_name": "Dual-Basin Concurrent Inundation & Comm Collapse",
+        "condition": "storm front straddling two urban catchment basins simultaneously",
+        "rainfall_mm": 175.0,
+        "gauge_level_m": 6.60,
+        "call_volume": 530,
+        "risk_label": "SEVERE",
+        "notes": "Stresses inter-basin emergency routing resources."
     }
 ]
 

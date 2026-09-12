@@ -47,12 +47,12 @@ for sev in ["LOW", "MODERATE", "SEVERE"]:
     c_mean = baseline.loc[sev, ("call_volume", "mean")]
     c_std = baseline.loc[sev, ("call_volume", "std")]
 
-    for i in range(2):
-        rain = max(0.0, float(np.random.normal(r_mean, r_std * 0.8)))
-        gauge = max(0.5, float(np.random.normal(g_mean, g_std * 0.8)))
-        calls = max(5, int(np.random.normal(c_mean, c_std * 0.8)))
+    for i in range(350):
+        rain = min(245.0, max(0.0, float(np.random.normal(r_mean, r_std * 0.8))))
+        gauge = min(9.5, max(0.5, float(np.random.normal(g_mean, g_std * 0.8))))
+        calls = min(950, max(5, int(np.random.normal(c_mean, c_std * 0.8))))
         synthetic_records.append({
-            "scenario_name": f"Synthetic_{sev}_Sample_{i+1}",
+            "scenario_name": f"Synthetic_{sev}_Sample_{i+1:04d}",
             "rainfall_mm": round(rain, 1),
             "gauge_level_m": round(gauge, 2),
             "call_volume": calls,
